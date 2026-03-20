@@ -1,6 +1,10 @@
 run 
+**cd server**
 **npm install**
 
+to run the backend
+**cd server** 
+**npm run dev**
 
 .env 
 # ─── MongoDB Atlas ────────────────────────────────────────────────────────────
