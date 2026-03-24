@@ -1,6 +1,18 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Student = require("../models/Student");
+const Hostel = require("../models/Hostel");
+
+// ─── Populate config ─────────────────────────────────────────────────────────
+// Deep-populates hostelId (ObjectId on User) so responses include hostel details.
+const USER_POPULATE = {
+  path: "userId",
+  select: "name username hostelId isFirstLogin createdAt",
+  populate: {
+    path: "hostelId",
+    select: "name type location",
+  },
+};
 
 // Temporary password assigned to newly created student accounts
 const TEMP_PASSWORD = "Fintrix@123";
@@ -35,7 +47,28 @@ const addStudent = async (req, res) => {
 
     const normalizedStudentId = studentId.trim().toUpperCase();
 
-    // 2. Check if studentId is already in use (as username or studentId)
+    // 2. Validate hostelId if provided
+    if (hostelId) {
+      if (!mongoose.Types.ObjectId.isValid(hostelId)) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: "Invalid hostelId format.",
+        });
+      }
+      const hostelExists = await Hostel.findById(hostelId).session(session);
+      if (!hostelExists) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({
+          success: false,
+          message: "Hostel not found. Please provide a valid hostelId.",
+        });
+      }
+    }
+
+    // 3. Check if studentId is already in use (as username or studentId)
     const existingUser = await User.findOne({
       username: normalizedStudentId.toLowerCase(),
     }).session(session);
@@ -124,7 +157,7 @@ const addStudent = async (req, res) => {
 const getAllStudents = async (req, res) => {
   try {
     const students = await Student.find()
-      .populate("userId", "name username hostelId isFirstLogin createdAt")
+      .populate(USER_POPULATE)
       .sort({ createdAt: -1 }); // Newest first
 
     return res.status(200).json({
@@ -168,7 +201,7 @@ const updateStudent = async (req, res) => {
       id,
       { $set: updateFields },
       { new: true, runValidators: true } // Return updated doc, run schema validators
-    ).populate("userId", "name username hostelId");
+    ).populate(USER_POPULATE);
 
     if (!updatedStudent) {
       return res.status(404).json({

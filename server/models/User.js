@@ -34,9 +34,10 @@ const userSchema = new mongoose.Schema(
       required: [true, "Role is required"],
     },
 
-    // Optional: links non-admin staff/students to a specific hostel
+    // Links non-admin staff/students to a specific hostel (ObjectId ref)
     hostelId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hostel",
       default: null,
     },
 

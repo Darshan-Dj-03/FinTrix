@@ -9,6 +9,8 @@ const connectDB = require("./config/db");
 const authRoutes    = require("./routes/authRoutes");
 const adminRoutes   = require("./routes/adminRoutes");
 const studentRoutes = require("./routes/studentRoutes");
+const hostelRoutes  = require("./routes/hostelRoutes");
+const expenseRoutes = require("./routes/expenseRoutes");
 
 // ─── App Initialisation ───────────────────────────────────────────────────────
 const app = express();
@@ -34,6 +36,8 @@ app.use(
 app.use("/auth",    authRoutes);
 app.use("/admin",   adminRoutes);
 app.use("/student", studentRoutes);
+app.use("/hostel",  hostelRoutes);
+app.use("/expense", expenseRoutes);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {

@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const User = require("../models/User");
+const Hostel = require("../models/Hostel");
 
 // Temporary password assigned to every newly created user
 const TEMP_PASSWORD = "Fintrix@123";
@@ -33,7 +35,24 @@ const createUser = async (req, res) => {
       });
     }
 
-    // 3. Check if username is already taken
+    // 3. Validate hostelId if provided (must be a real Hostel document)
+    if (hostelId) {
+      if (!mongoose.Types.ObjectId.isValid(hostelId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid hostelId format.",
+        });
+      }
+      const hostelExists = await Hostel.findById(hostelId);
+      if (!hostelExists) {
+        return res.status(404).json({
+          success: false,
+          message: "Hostel not found. Please provide a valid hostelId.",
+        });
+      }
+    }
+
+    // 4. Check if username is already taken
     const existingUser = await User.findOne({
       username: username.toLowerCase().trim(),
     });
@@ -45,7 +64,7 @@ const createUser = async (req, res) => {
       });
     }
 
-    // 4. Create user with temp password
+    // 5. Create user with temp password
     //    The pre-save hook in User.js handles hashing automatically
     const newUser = await User.create({
       name,
