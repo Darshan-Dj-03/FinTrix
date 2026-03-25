@@ -11,6 +11,7 @@ const adminRoutes   = require("./routes/adminRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const hostelRoutes  = require("./routes/hostelRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
+const billRoutes    = require("./routes/billRoutes");
 
 // ─── App Initialisation ───────────────────────────────────────────────────────
 const app = express();
@@ -19,11 +20,8 @@ const app = express();
 connectDB();
 
 // ─── Global Middleware ────────────────────────────────────────────────────────
-
-// Parse incoming JSON bodies
 app.use(express.json());
 
-// Enable CORS – configure allowed origins via CORS_ORIGIN env var in production
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "*",
@@ -32,12 +30,13 @@ app.use(
   })
 );
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/auth",    authRoutes);
-app.use("/admin",   adminRoutes);
+// ─── Routes ─────────────────────────────────────────────────────────────
+app.use("/auth", authRoutes);
+app.use("/admin", adminRoutes);
 app.use("/student", studentRoutes);
-app.use("/hostel",  hostelRoutes);
+app.use("/hostel", hostelRoutes);
 app.use("/expense", expenseRoutes);
+app.use("/bill", billRoutes);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {
@@ -57,7 +56,6 @@ app.use((req, res) => {
 });
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.stack);
   res.status(err.status || 500).json({
@@ -68,8 +66,11 @@ app.use((err, req, res, next) => {
 
 // ─── Server Start ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-const HOST = "0.0.0.0"; // Listen on all network interfaces
+const HOST = "0.0.0.0";
 
-app.listen(PORT, HOST, () => {
-  console.log(`🚀 Fintrix server running on http://${HOST}:${PORT}`);
-});
+// ⚡ Start server only if NOT running tests
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, HOST, () => {
+    console.log(`🚀 Fintrix server running on http://${HOST}:${PORT}`);
+  });
+}
