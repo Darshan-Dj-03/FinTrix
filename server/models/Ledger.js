@@ -4,8 +4,11 @@ const ledgerSchema = new mongoose.Schema(
   {
     month: {
       type: String,
-      required: [true, 'Month is required (format: YYYY-MM)'],
-      match: [/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'],
+      required: [true, 'Month is required (format: Mon-YYYY)'],
+      match: [
+        /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/,
+        'Month must be in Mon-YYYY format',
+      ],
     },
     hostelId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -16,10 +19,10 @@ const ledgerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    totalExpense: {
+    totalExpenses: {
       type: Number,
-      required: [true, 'Total expense is required'],
-      min: [0, 'Total expense cannot be negative'],
+      required: [true, 'Total expenses is required'],
+      min: [0, 'Total expenses cannot be negative'],
     },
     totalBilled: {
       type: Number,
@@ -30,11 +33,6 @@ const ledgerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: [0, 'Total collected cannot be negative'],
-    },
-    totalFines: {
-      type: Number,
-      default: 0,
-      min: [0, 'Total fines cannot be negative'],
     },
     closingBalance: {
       type: Number,
@@ -59,5 +57,6 @@ const ledgerSchema = new mongoose.Schema(
 
 // Unique index on hostel + month
 ledgerSchema.index({ hostelId: 1, month: 1 }, { unique: true });
+ledgerSchema.index({ month: 1, hostelId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Ledger', ledgerSchema);

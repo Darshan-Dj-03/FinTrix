@@ -94,7 +94,7 @@ const calculateFine = (dueDate, currentDate = new Date(), isEBL = false, eblExem
  * @throws {Error} – If validation fails (e.g., no active students)
  */
 const generateMessBills = (expense, students, consumptionRecords = [], options = {}) => {
-  const { eblExemptFine = true, currentDate = new Date() } = options;
+  const { eblExemptFine = true, currentDate = new Date(), charges = [] } = options;
 
   // ─── 1. Validate inputs ────────────────────────────────────────────────────────
   if (!expense) {
@@ -157,6 +157,11 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
   const bakeryBananaTotalAmount = expense.bakery_total + expense.banana_total;
   const bakeryChargePerStudent = roundTwoDecimals(bakeryBananaTotalAmount / totalActiveStudents);
 
+  // Dynamic charges
+  const totalDynamicCharges = charges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
+  const additionalChargePerStudent =
+    totalActiveStudents > 0 ? roundTwoDecimals(totalDynamicCharges / totalActiveStudents) : 0;
+
   // ─── 5. Generate bill for each active student ──────────────────────────────────
   const bills = activeStudents.map((student) => {
     const studentIdStr = student._id.toString();
@@ -180,6 +185,7 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
         + labourChargePerStudent
         + nightWatchCharge
         + bakeryChargePerStudent
+        + additionalChargePerStudent
         + eggTotal
         + chickenTotal
         + paneerTotal
@@ -202,6 +208,7 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       labour_charge: labourChargePerStudent,
       night_watch_charge: nightWatchCharge,
       bakery_charge: bakeryChargePerStudent,
+      additional_charge: additionalChargePerStudent,
 
       // Unit items
       egg_count: consumption.egg_count,

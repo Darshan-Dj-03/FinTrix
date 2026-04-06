@@ -116,6 +116,15 @@ const messBillSchema = new mongoose.Schema(
       min: [0, "bakery_charge cannot be negative"],
     },
 
+    /**
+     * Sum of dynamic monthly charges distributed per student.
+     */
+    additional_charge: {
+      type: Number,
+      default: 0,
+      min: [0, "additional_charge cannot be negative"],
+    },
+
     // ── Unit Items ─────────────────────────────────────────────────────────────
 
     /**
@@ -178,7 +187,8 @@ const messBillSchema = new mongoose.Schema(
     /**
      * Total mess bill = base_mess + keb_charge + labour_charge +
      *                   (night_watch_charge if female, else 0) +
-     *                   bakery_charge + egg_total + chicken_total + paneer_total
+     *                   bakery_charge + additional_charge +
+     *                   egg_total + chicken_total + paneer_total
      */
     total_amount: {
       type: Number,

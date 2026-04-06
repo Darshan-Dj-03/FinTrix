@@ -4,8 +4,11 @@ const reportSchema = new mongoose.Schema(
   {
     month: {
       type: String,
-      required: [true, 'Month is required (format: YYYY-MM)'],
-      match: [/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'],
+      required: [true, 'Month is required (format: Mon-YYYY)'],
+      match: [
+        /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/,
+        'Month must be in Mon-YYYY format',
+      ],
     },
     hostelId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -60,10 +63,66 @@ const reportSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
-    billCount: {
+    totalExpenses: {
       type: Number,
       default: 0,
     },
+    totalBilled: {
+      type: Number,
+      default: 0,
+    },
+    totalCollected: {
+      type: Number,
+      default: 0,
+    },
+    outstanding: {
+      type: Number,
+      default: 0,
+    },
+    hostelWiseBreakdown: [
+      {
+        hostelId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Hostel',
+        },
+        hostelName: {
+          type: String,
+          default: '',
+        },
+        totalBilled: {
+          type: Number,
+          default: 0,
+        },
+        totalStudents: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
+    studentWiseSummary: [
+      {
+        studentId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Student',
+        },
+        studentCode: {
+          type: String,
+          default: '',
+        },
+        name: {
+          type: String,
+          default: '',
+        },
+        billAmount: {
+          type: Number,
+          default: 0,
+        },
+        paymentStatus: {
+          type: String,
+          default: 'pending',
+        },
+      },
+    ],
     totalAmount: {
       type: Number,
       default: 0,
@@ -74,5 +133,6 @@ const reportSchema = new mongoose.Schema(
 
 // Unique index on hostel + month
 reportSchema.index({ hostelId: 1, month: 1 }, { unique: true });
+reportSchema.index({ month: 1, status: 1, hostelId: 1 });
 
 module.exports = mongoose.model('Report', reportSchema);

@@ -46,6 +46,21 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    isEBL: {
+      type: Boolean,
+      default: false,
+    },
+
+    eblApproved: {
+      type: Boolean,
+      default: false,
+    },
+
+    eblRequestPending: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true, // Adds createdAt and updatedAt automatically

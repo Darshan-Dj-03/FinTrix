@@ -4,6 +4,7 @@ const Expense = require('../models/Expense');
 const Student = require('../models/Student');
 const StudentConsumption = require('../models/StudentConsumption');
 const Hostel = require('../models/Hostel');
+const Charge = require('../models/Charge');
 const { generateMessBills } = require('../services/calculationService');
 
 /**
@@ -18,11 +19,11 @@ const scheduleBillGeneration = () => {
     try {
       // Get current date info
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth()).padStart(2, '0'); // Current month (0-11)
-      const previousMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-      const previousYear = now.getMonth() === 0 ? year - 1 : year;
-      const billingMonth = `${previousYear}-${String(previousMonth + 1).padStart(2, '0')}`;
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const currentMonthIndex = now.getMonth();
+      const previousMonthIndex = currentMonthIndex === 0 ? 11 : currentMonthIndex - 1;
+      const previousYear = currentMonthIndex === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const billingMonth = `${monthNames[previousMonthIndex]}-${previousYear}`;
 
       console.log(`[CRON] Generating bills for: ${billingMonth}`);
 
@@ -73,8 +74,13 @@ const scheduleBillGeneration = () => {
             month: billingMonth,
           });
 
+          const charges = await Charge.find({
+            hostelId: hostel._id,
+            month: billingMonth,
+          });
+
           // Generate bills
-          const billPayloads = generateMessBills(expense, hostelStudents, consumptions);
+          const billPayloads = generateMessBills(expense, hostelStudents, consumptions, { charges });
 
           // Insert bills
           await MessBill.insertMany(billPayloads);

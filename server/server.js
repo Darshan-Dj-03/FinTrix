@@ -12,6 +12,10 @@ const studentRoutes = require("./routes/studentRoutes");
 const hostelRoutes  = require("./routes/hostelRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const billRoutes    = require("./routes/billRoutes");
+const reportRoutes  = require("./routes/reportRoutes");
+const eblRoutes     = require("./routes/eblRoutes");
+const chargeRoutes  = require("./routes/chargeRoutes");
+const ledgerRoutes  = require("./routes/ledgerRoutes");
 
 // ─── App Initialisation ───────────────────────────────────────────────────────
 const app = express();
@@ -37,6 +41,10 @@ app.use("/student", studentRoutes);
 app.use("/hostel", hostelRoutes);
 app.use("/expense", expenseRoutes);
 app.use("/bill", billRoutes);
+app.use("/report", reportRoutes);
+app.use("/ebl", eblRoutes);
+app.use("/charges", chargeRoutes);
+app.use("/ledger", ledgerRoutes);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {

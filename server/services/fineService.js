@@ -3,7 +3,7 @@
  * Rules:
  * - daysLate <= 30: fine = daysLate * 2
  * - daysLate > 30: fine = (30 * 2) + ((daysLate - 30) * 5)
- * - EBL students get 50% reduction
+ * - EBL students get 100% waiver (fine = 0)
  */
 const calculateFine = (dueDate, isEBL = false, currentDate = new Date()) => {
   const dueDateObj = new Date(dueDate);
@@ -24,9 +24,9 @@ const calculateFine = (dueDate, isEBL = false, currentDate = new Date()) => {
     fine = (30 * 2) + ((daysLate - 30) * 5);
   }
 
-  // Apply EBL exemption (50% reduction)
+  // Apply EBL exemption (100% waiver)
   if (isEBL) {
-    fine = fine * 0.5;
+    fine = 0;
   }
 
   return Math.round(fine * 100) / 100; // Round to 2 decimals

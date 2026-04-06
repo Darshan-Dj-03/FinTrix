@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Expense = require("../models/Expense");
 const MessBill = require("../models/MessBill");
 const StudentConsumption = require("../models/StudentConsumption");
+const Charge = require("../models/Charge");
 const { generateMessBills } = require("../services/calculationService");
 
 // ─── Month format validator ───────────────────────────────────────────────────
@@ -130,10 +131,15 @@ const generateBills = async (req, res) => {
       month,
     });
 
+    const charges = await Charge.find({
+      hostelId: caretakerHostelId,
+      month,
+    });
+
     // ── 6. Call calculation service ─────────────────────────────────────────────
     let billPayloads;
     try {
-      billPayloads = generateMessBills(expense, filteredStudents, consumptionRecords);
+      billPayloads = generateMessBills(expense, filteredStudents, consumptionRecords, { charges });
     } catch (calcError) {
       return res.status(400).json({
         success: false,

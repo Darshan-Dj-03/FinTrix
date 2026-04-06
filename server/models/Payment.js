@@ -14,8 +14,11 @@ const paymentSchema = new mongoose.Schema(
     },
     month: {
       type: String,
-      required: [true, 'Month is required (format: YYYY-MM)'],
-      match: [/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'],
+      required: [true, 'Month is required (format: Mon-YYYY)'],
+      match: [
+        /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/,
+        'Month must be in Mon-YYYY format',
+      ],
     },
     billAmount: {
       type: Number,
