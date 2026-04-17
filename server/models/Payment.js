@@ -7,10 +7,15 @@ const paymentSchema = new mongoose.Schema(
       ref: 'Student',
       required: [true, 'Student is required'],
     },
-    userId: {
+    billId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'User is required'],
+      ref: 'MessBill',
+      required: [true, 'Bill is required'],
+    },
+    hostelId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Hostel',
+      required: [true, 'Hostel is required'],
     },
     month: {
       type: String,
@@ -20,63 +25,65 @@ const paymentSchema = new mongoose.Schema(
         'Month must be in Mon-YYYY format',
       ],
     },
-    billAmount: {
+    amount: {
       type: Number,
-      required: [true, 'Bill amount is required'],
-      min: [0, 'Bill amount cannot be negative'],
-    },
-    fine: {
-      type: Number,
-      default: 0,
-      min: [0, 'Fine cannot be negative'],
-    },
-    totalAmount: {
-      type: Number,
-      required: [true, 'Total amount is required'],
-      min: [0, 'Total amount cannot be negative'],
-    },
-    amountPaid: {
-      type: Number,
-      default: 0,
-      min: [0, 'Amount paid cannot be negative'],
+      required: [true, 'Amount is required'],
+      min: [0, 'Amount cannot be negative'],
     },
     status: {
       type: String,
       enum: {
-        values: ['pending', 'partial', 'paid'],
+        values: ['pending', 'paid'],
         message: 'Invalid payment status',
       },
-      default: 'pending',
+      default: 'paid',
     },
     paymentMethod: {
       type: String,
       enum: {
-        values: ['cash', 'bank_transfer', 'cheque', 'online'],
+        values: ['cash', 'upi'],
         message: 'Invalid payment method',
       },
-      default: 'cash',
+      default: 'upi',
     },
-    referenceNumber: {
+    utrNumber: {
       type: String,
+      trim: true,
+      maxlength: [100, 'UTR number cannot exceed 100 characters'],
       default: '',
     },
-    paidAt: {
+    paymentMadeDate: {
       type: Date,
       default: null,
     },
-    dueDate: {
-      type: Date,
-      required: [true, 'Due date is required'],
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'verifiedBy is required'],
     },
-    notes: {
+    verifiedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    idempotencyKey: {
       type: String,
       default: '',
+      trim: true,
     },
+    billPaymentKey: {
+      type: String,
+      default: '',
+      trim: true,
+    }
   },
   { timestamps: true }
 );
 
-// Unique index on student + month
-paymentSchema.index({ studentId: 1, month: 1 }, { unique: true });
+paymentSchema.index({ billId: 1, createdAt: -1 });
+paymentSchema.index({ hostelId: 1, month: 1, createdAt: -1 });
+paymentSchema.index({ studentId: 1, month: 1, createdAt: -1 });
+paymentSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ billPaymentKey: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ utrNumber: 1, month: 1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

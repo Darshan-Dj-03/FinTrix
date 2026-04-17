@@ -7,7 +7,8 @@ const Hostel = require("../models/Hostel");
 // Deep-populates hostelId (ObjectId on User) so responses include hostel details.
 const USER_POPULATE = {
   path: "userId",
-  select: "name username hostelId isFirstLogin createdAt",
+  select:
+    "name username email role hostelId isFirstLogin isActive isEBL eblApproved eblRequestPending eblRejected createdAt",
   populate: {
     path: "hostelId",
     select: "name type location",
@@ -16,6 +17,22 @@ const USER_POPULATE = {
 
 // Temporary password assigned to newly created student accounts
 const TEMP_PASSWORD = "Fintrix@123";
+
+const isOperationalStudent = (student, reqUser = null) => {
+  if (!student || student.isActive === false) {
+    return false;
+  }
+
+  if (!student.userId || student.userId.role !== "student" || student.userId.isActive === false) {
+    return false;
+  }
+
+  if (reqUser?.role === "caretaker") {
+    return student.userId?.hostelId?._id?.toString() === reqUser.hostelId?.toString();
+  }
+
+  return true;
+};
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
@@ -160,10 +177,12 @@ const getAllStudents = async (req, res) => {
       .populate(USER_POPULATE)
       .sort({ createdAt: -1 }); // Newest first
 
+    const filteredStudents = students.filter((student) => isOperationalStudent(student, req.user));
+
     return res.status(200).json({
       success: true,
-      count: students.length,
-      students,
+      count: filteredStudents.length,
+      students: filteredStudents,
     });
   } catch (error) {
     console.error("Get all students error:", error);

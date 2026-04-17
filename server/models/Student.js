@@ -40,6 +40,10 @@ const studentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isTemporaryId: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

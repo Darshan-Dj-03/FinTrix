@@ -61,6 +61,32 @@ const studentConsumptionSchema = new mongoose.Schema(
       default: 0,
       min: [0, "paneer_count cannot be negative"],
     },
+
+    /**
+     * Direct milk amount consumed by this student in the month.
+     * This is stored as an amount, not a count, so billing can charge
+     * only students who actually consumed milk.
+     */
+    milk_amount: {
+      type: Number,
+      default: 0,
+      min: [0, "milk_amount cannot be negative"],
+    },
+
+    /**
+     * Manual fine added by caretaker for this student's month.
+     * This is added on top of the system-calculated late fine.
+     */
+    fine_amount: {
+      type: Number,
+      default: 0,
+      min: [0, "fine_amount cannot be negative"],
+    },
+    absent_days: {
+      type: Number,
+      default: 0,
+      min: [0, "absent_days cannot be negative"],
+    },
   },
   {
     timestamps: true, // createdAt + updatedAt

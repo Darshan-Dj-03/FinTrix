@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const logger = require("../utils/logger");
 
 /**
  * Express validator middleware
@@ -24,7 +25,12 @@ const validateRequest = (req, res, next) => {
  * Must be placed AFTER all other middleware and routes
  */
 const globalErrorHandler = (err, req, res, next) => {
-  console.error('Global error handler:', err);
+  logger.error("Global error handler triggered", {
+    error: err.message,
+    stack: err.stack,
+    path: req.originalUrl,
+    method: req.method,
+  });
 
   // Mongoose validation error
   if (err.name === 'ValidationError') {
@@ -73,7 +79,7 @@ const globalErrorHandler = (err, req, res, next) => {
   }
 
   // Default error response
-  res.status(err.status || 500).json({
+  return res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),

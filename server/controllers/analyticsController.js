@@ -1,7 +1,44 @@
+const mongoose = require("mongoose");
 const MessBill = require('../models/MessBill');
 const StudentConsumption = require('../models/StudentConsumption');
 const Expense = require('../models/Expense');
-const Hostel = require('../models/Hostel');
+const Payment = require("../models/Payment");
+const logger = require("../utils/logger");
+
+const activeStudentLookupStages = [
+  {
+    $lookup: {
+      from: "students",
+      localField: "studentId",
+      foreignField: "_id",
+      as: "student",
+    },
+  },
+  { $unwind: "$student" },
+  {
+    $lookup: {
+      from: "users",
+      localField: "student.userId",
+      foreignField: "_id",
+      as: "studentUser",
+    },
+  },
+  { $unwind: "$studentUser" },
+  {
+    $match: {
+      "student.isActive": { $ne: false },
+      "studentUser.isActive": { $ne: false },
+    },
+  },
+];
+
+const resolveScopedHostelId = (req) => {
+  if (req.user.role === "caretaker") {
+    return req.user.hostelId || null;
+  }
+
+  return req.query.hostelId || null;
+};
 
 /**
  * Get summary analytics for a month
@@ -13,13 +50,16 @@ const getSummaryAnalytics = async (req, res) => {
     const { month } = req.params;
 
     // Build filter based on role
-    const matchStage =
-      req.user.role === 'admin'
-        ? { month }
-        : { month, hostelId: req.user.hostelId };
+    const scopedHostelId = resolveScopedHostelId(req);
+    const matchStage = { month };
+
+    if (scopedHostelId) {
+      matchStage.hostelId = scopedHostelId;
+    }
 
     const bills = await MessBill.aggregate([
       { $match: matchStage },
+      ...activeStudentLookupStages,
       {
         $group: {
           _id: null,
@@ -34,7 +74,7 @@ const getSummaryAnalytics = async (req, res) => {
           },
           totalPending: {
             $sum: {
-              $cond: [{ $eq: ['$payment_status', 'unpaid'] }, '$total_amount', 0],
+              $cond: [{ $in: ['$payment_status', ['pending', 'partial']] }, '$total_amount', 0],
             },
           },
           paidCount: {
@@ -44,7 +84,7 @@ const getSummaryAnalytics = async (req, res) => {
           },
           unpaidCount: {
             $sum: {
-              $cond: [{ $eq: ['$payment_status', 'unpaid'] }, 1, 0],
+              $cond: [{ $in: ['$payment_status', ['pending', 'partial']] }, 1, 0],
             },
           },
         },
@@ -83,7 +123,7 @@ const getSummaryAnalytics = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Analytics summary error:', error);
+    logger.error("Analytics summary error", { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
@@ -99,6 +139,7 @@ const getHostelAnalytics = async (req, res) => {
 
     const hostelAnalytics = await MessBill.aggregate([
       { $match: { month } },
+      ...activeStudentLookupStages,
       {
         $lookup: {
           from: 'hostels',
@@ -124,7 +165,7 @@ const getHostelAnalytics = async (req, res) => {
           },
           unpaidStudents: {
             $sum: {
-              $cond: [{ $eq: ['$payment_status', 'unpaid'] }, 1, 0],
+              $cond: [{ $in: ['$payment_status', ['pending', 'partial']] }, 1, 0],
             },
           },
         },
@@ -155,7 +196,7 @@ const getHostelAnalytics = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Hostel analytics error:', error);
+    logger.error("Hostel analytics error", { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
@@ -169,18 +210,25 @@ const getConsumptionAnalytics = async (req, res) => {
   try {
     const { month } = req.params;
 
+    const matchStage = { month };
+    const scopedHostelId = resolveScopedHostelId(req);
+    if (scopedHostelId) {
+      matchStage.hostelId = new mongoose.Types.ObjectId(scopedHostelId);
+    }
+
     const consumptions = await StudentConsumption.aggregate([
-      { $match: { month } },
+      { $match: matchStage },
+      ...activeStudentLookupStages,
       {
         $group: {
           _id: null,
-          totalEggs: { $sum: '$eggCount' },
-          totalChicken: { $sum: '$chickenCount' },
-          totalPaneer: { $sum: '$paneerCount' },
+          totalEggs: { $sum: '$egg_count' },
+          totalChicken: { $sum: '$chicken_count' },
+          totalPaneer: { $sum: '$paneer_count' },
           studentsConsuming: { $sum: 1 },
-          avgEggPerStudent: { $avg: '$eggCount' },
-          avgChickenPerStudent: { $avg: '$chickenCount' },
-          avgPaneerPerStudent: { $avg: '$paneerCount' },
+          avgEggPerStudent: { $avg: '$egg_count' },
+          avgChickenPerStudent: { $avg: '$chicken_count' },
+          avgPaneerPerStudent: { $avg: '$paneer_count' },
         },
       },
     ]);
@@ -217,7 +265,7 @@ const getConsumptionAnalytics = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Consumption analytics error:', error);
+    logger.error("Consumption analytics error", { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
@@ -231,35 +279,20 @@ const getStudentAnalytics = async (req, res) => {
   try {
     const { month } = req.params;
 
-    const matchStage =
-      req.user.role === 'admin'
-        ? { month }
-        : { month, hostelId: req.user.hostelId };
+    const scopedHostelId = resolveScopedHostelId(req);
+    const matchStage = { month };
+
+    if (scopedHostelId) {
+      matchStage.hostelId = scopedHostelId;
+    }
 
     const students = await MessBill.aggregate([
       { $match: matchStage },
-      {
-        $lookup: {
-          from: 'students',
-          localField: 'studentId',
-          foreignField: '_id',
-          as: 'student',
-        },
-      },
-      { $unwind: '$student' },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
+      ...activeStudentLookupStages,
       {
         $project: {
           studentId: '$student._id',
-          studentName: '$user.name',
+          studentName: '$studentUser.name',
           gender: '$student.gender',
           isEBL: '$student.isEBL',
           billAmount: '$total_amount',
@@ -288,8 +321,91 @@ const getStudentAnalytics = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Student analytics error:', error);
+    logger.error("Student analytics error", { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+/**
+ * Get monthly finance analytics
+ * GET /analytics/finance/:month
+ * Access: Admin only
+ */
+const getFinanceAnalytics = async (req, res) => {
+  try {
+    const { month } = req.params;
+
+    const scopedHostelId = resolveScopedHostelId(req);
+    const expenseMatch = { month };
+    const billMatch = { month };
+    const paymentMatch = { month, status: "paid" };
+
+    if (scopedHostelId) {
+      expenseMatch.hostelId = new mongoose.Types.ObjectId(scopedHostelId);
+      billMatch.hostelId = new mongoose.Types.ObjectId(scopedHostelId);
+      paymentMatch.hostelId = new mongoose.Types.ObjectId(scopedHostelId);
+    }
+
+    const [expenseData] = await Expense.aggregate([
+      { $match: expenseMatch },
+      {
+        $project: {
+          total: {
+            $add: [
+              "$elp",
+              "$cylinder",
+              "$oil",
+              "$kirana",
+              "$milk",
+              "$keb_total",
+              "$labour_total",
+              "$night_watch_total",
+              "$bakery_total",
+              "$banana_total",
+            ],
+          },
+        },
+      },
+      { $group: { _id: null, totalExpenses: { $sum: "$total" } } },
+    ]);
+
+    const [billData] = await MessBill.aggregate([
+      { $match: billMatch },
+      ...activeStudentLookupStages,
+      {
+        $group: {
+          _id: null,
+          totalBilled: { $sum: "$total_amount" },
+          outstanding: {
+            $sum: {
+              $subtract: [
+                { $add: ["$total_amount", "$fine"] },
+                { $ifNull: ["$amount_paid", 0] },
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const [paymentData] = await Payment.aggregate([
+      { $match: paymentMatch },
+      { $group: { _id: null, totalCollected: { $sum: "$amount" } } },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      month,
+      data: {
+        totalExpenses: Number(expenseData?.totalExpenses || 0),
+        totalBilled: Number(billData?.totalBilled || 0),
+        totalCollected: Number(paymentData?.totalCollected || 0),
+        outstanding: Math.max(Number(billData?.outstanding || 0), 0),
+      },
+    });
+  } catch (error) {
+    logger.error("Finance analytics error", { error: error.message, stack: error.stack });
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
 
@@ -298,4 +414,5 @@ module.exports = {
   getHostelAnalytics,
   getConsumptionAnalytics,
   getStudentAnalytics,
+  getFinanceAnalytics,
 };

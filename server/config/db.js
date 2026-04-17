@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const logger = require("../utils/logger");
 
 /**
  * Connects to MongoDB Atlas using the MONGO_URI environment variable.
@@ -7,13 +8,14 @@ const mongoose = require("mongoose");
  */
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      // useNewUrlParser and useUnifiedTopology are defaults in mongoose 8+
-    });
-    console.log(` MongoDB Connected: ${conn.connection.host}`);
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+    logger.info("MongoDB connected", { host: conn.connection.host });
   } catch (error) {
-    console.error(` MongoDB Connection Error: ${error.message}`);
-    process.exit(1); // Exit with failure
+    logger.error("MongoDB connection failed", {
+      error: error.message,
+      stack: error.stack,
+    });
+    process.exit(1);
   }
 };
 

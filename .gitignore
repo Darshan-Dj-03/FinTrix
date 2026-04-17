@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# build files
+dist/
+client/dist/
+
+# env files
+.env
+client/.env
+
+# temp files
+tmp/
+tmp_docx/
+
+# logs
+*.log

@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const Charge = require("../models/Charge");
 const Hostel = require("../models/Hostel");
+const { getPagination, buildPaginationMeta } = require("../utils/pagination");
+const { createAuditLog } = require("../services/auditService");
+const logger = require("../utils/logger");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 
@@ -72,6 +75,20 @@ const addCharge = async (req, res) => {
       { path: "addedBy", select: "name username role" },
     ]);
 
+    await createAuditLog({
+      action: "CHARGE_CREATED",
+      performedBy: req.user._id,
+      role: req.user.role,
+      entityId: charge._id,
+      entityType: "Charge",
+      metadata: {
+        hostelId: resolved.hostelId,
+        month,
+        title: charge.title,
+        amount: charge.amount,
+      },
+    });
+
     return res.status(201).json({
       success: true,
       message: "Charge added successfully.",
@@ -87,7 +104,7 @@ const addCharge = async (req, res) => {
     if (error.name === "ValidationError") {
       return res.status(400).json({ success: false, message: error.message });
     }
-    console.error("Add charge error:", error);
+    logger.error("Add charge error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };
@@ -120,18 +137,25 @@ const getChargesByMonth = async (req, res) => {
       filter.hostelId = req.query.hostelId;
     }
 
-    const charges = await Charge.find(filter)
-      .populate({ path: "hostelId", select: "name type location" })
-      .populate({ path: "addedBy", select: "name username role" })
-      .sort({ createdAt: -1 });
+    const { page, limit, skip } = getPagination(req.query);
+    const [charges, total] = await Promise.all([
+      Charge.find(filter)
+        .populate({ path: "hostelId", select: "name type location" })
+        .populate({ path: "addedBy", select: "name username role" })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Charge.countDocuments(filter),
+    ]);
 
     return res.status(200).json({
       success: true,
       message: "Charges fetched successfully.",
       data: charges,
+      pagination: buildPaginationMeta(page, limit, total),
     });
   } catch (error) {
-    console.error("Get charges error:", error);
+    logger.error("Get charges error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };
@@ -180,6 +204,20 @@ const updateCharge = async (req, res) => {
       { path: "addedBy", select: "name username role" },
     ]);
 
+    await createAuditLog({
+      action: "CHARGE_UPDATED",
+      performedBy: req.user._id,
+      role: req.user.role,
+      entityId: charge._id,
+      entityType: "Charge",
+      metadata: {
+        hostelId: charge.hostelId,
+        month: charge.month,
+        title: charge.title,
+        amount: charge.amount,
+      },
+    });
+
     return res.status(200).json({
       success: true,
       message: "Charge updated successfully.",
@@ -192,7 +230,7 @@ const updateCharge = async (req, res) => {
         message: "Charge with the same title already exists for this hostel and month.",
       });
     }
-    console.error("Update charge error:", error);
+    logger.error("Update charge error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };
@@ -221,13 +259,26 @@ const deleteCharge = async (req, res) => {
     }
 
     await Charge.findByIdAndDelete(chargeId);
+    await createAuditLog({
+      action: "CHARGE_DELETED",
+      performedBy: req.user._id,
+      role: req.user.role,
+      entityId: charge._id,
+      entityType: "Charge",
+      metadata: {
+        hostelId: charge.hostelId,
+        month: charge.month,
+        title: charge.title,
+        amount: charge.amount,
+      },
+    });
     return res.status(200).json({
       success: true,
       message: "Charge deleted successfully.",
       data: {},
     });
   } catch (error) {
-    console.error("Delete charge error:", error);
+    logger.error("Delete charge error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };

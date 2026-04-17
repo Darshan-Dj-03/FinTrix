@@ -4,8 +4,19 @@ const router = express.Router();
 const {
   generateBills,
   getAllBillsByMonth,
+  getBillBreakdownByMonth,
   getStudentBill,
+  getStudentBillHistory,
+  getMessBillReportByMonth,
+  generateMessBillReport,
+  submitMessBillReport,
+  approveMessBillReportByWarden,
+  approveMessBillReportByDean,
+  getBillConfig,
+  upsertBillConfig,
+  updateStudentPaymentDetails,
 } = require("../controllers/messController");
+const { generateBillPDF, generateMonthlyMessBillBreakdownPDF } = require("../controllers/pdfController");
 const { protect } = require("../middleware/authMiddleware");
 const { checkRole } = require("../middleware/roleMiddleware");
 
@@ -24,6 +35,20 @@ router.post(
   generateBills
 );
 
+router.get(
+  "/config/:month",
+  protect,
+  checkRole("caretaker", "admin", "dean", "warden"),
+  getBillConfig
+);
+
+router.put(
+  "/config/:month",
+  protect,
+  checkRole("caretaker"),
+  upsertBillConfig
+);
+
 /**
  * @route  GET /bill/all/:month
  * @access Protected – caretaker or admin
@@ -40,6 +65,48 @@ router.get(
   getAllBillsByMonth
 );
 
+router.get(
+  "/breakdown/:month",
+  protect,
+  checkRole("caretaker", "admin", "dean", "warden"),
+  getBillBreakdownByMonth
+);
+
+router.get(
+  "/report/status/:month",
+  protect,
+  checkRole("caretaker", "admin", "dean", "warden"),
+  getMessBillReportByMonth
+);
+
+router.post(
+  "/report/generate/:month",
+  protect,
+  checkRole("caretaker"),
+  generateMessBillReport
+);
+
+router.put(
+  "/report/submit/:month",
+  protect,
+  checkRole("caretaker"),
+  submitMessBillReport
+);
+
+router.put(
+  "/report/warden-approve/:month",
+  protect,
+  checkRole("warden"),
+  approveMessBillReportByWarden
+);
+
+router.put(
+  "/report/dean-approve/:month",
+  protect,
+  checkRole("admin", "dean"),
+  approveMessBillReportByDean
+);
+
 /**
  * @route  GET /bill/student/:studentId/:month
  * @access Protected – student (own bill), caretaker (all), admin (all)
@@ -52,9 +119,35 @@ router.get(
  *   month (string, "Mon-YYYY" format)
  */
 router.get(
+  "/history/:studentId",
+  protect,
+  getStudentBillHistory
+);
+
+router.get(
   "/student/:studentId/:month",
   protect,
   getStudentBill
+);
+
+router.put(
+  "/payment-info/:billId",
+  protect,
+  checkRole("student"),
+  updateStudentPaymentDetails
+);
+
+router.get(
+  "/pdf/:studentId/:month",
+  protect,
+  generateBillPDF
+);
+
+router.get(
+  "/report/pdf/:month",
+  protect,
+  checkRole("caretaker", "admin", "dean", "warden"),
+  generateMonthlyMessBillBreakdownPDF
 );
 
 module.exports = router;

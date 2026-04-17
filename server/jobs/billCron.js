@@ -6,6 +6,8 @@ const StudentConsumption = require('../models/StudentConsumption');
 const Hostel = require('../models/Hostel');
 const Charge = require('../models/Charge');
 const { generateMessBills } = require('../services/calculationService');
+const { runInTransaction } = require('../utils/transaction');
+const logger = require('../utils/logger');
 
 /**
  * Schedule automatic bill generation
@@ -14,7 +16,7 @@ const { generateMessBills } = require('../services/calculationService');
 const scheduleBillGeneration = () => {
   // Cron expression: 0 0 1 * * (1st of month at midnight)
   cron.schedule('0 0 1 * *', async () => {
-    console.log('[CRON] Starting automated bill generation...');
+    logger.info('[CRON] Starting automated bill generation');
     
     try {
       // Get current date info
@@ -25,7 +27,7 @@ const scheduleBillGeneration = () => {
       const previousYear = currentMonthIndex === 0 ? now.getFullYear() - 1 : now.getFullYear();
       const billingMonth = `${monthNames[previousMonthIndex]}-${previousYear}`;
 
-      console.log(`[CRON] Generating bills for: ${billingMonth}`);
+      logger.info('[CRON] Generating bills', { billingMonth });
 
       // Get all hostels
       const hostels = await Hostel.find();
@@ -39,7 +41,7 @@ const scheduleBillGeneration = () => {
           });
 
           if (!expense) {
-            console.log(`[CRON] No expense record for hostel ${hostel.name} in ${billingMonth}`);
+            logger.warn('[CRON] No expense record for hostel', { hostel: hostel.name, billingMonth });
             continue;
           }
 
@@ -50,21 +52,24 @@ const scheduleBillGeneration = () => {
           });
 
           if (existingBills) {
-            console.log(`[CRON] Bills already exist for hostel ${hostel.name} in ${billingMonth}`);
+            logger.info('[CRON] Bills already exist for hostel', { hostel: hostel.name, billingMonth });
             continue;
           }
 
           // Get all active students for this hostel
           const students = await Student.find({
             isActive: true,
-          }).populate('userId');
+          }).populate({
+            path: 'userId',
+            match: { isActive: true },
+          });
 
           const hostelStudents = students.filter(
-            s => s.userId.hostelId.toString() === hostel._id.toString()
+            s => s.userId && s.userId.hostelId.toString() === hostel._id.toString()
           );
 
           if (hostelStudents.length === 0) {
-            console.log(`[CRON] No active students for hostel ${hostel.name}`);
+            logger.warn('[CRON] No active students for hostel', { hostel: hostel.name });
             continue;
           }
 
@@ -79,27 +84,34 @@ const scheduleBillGeneration = () => {
             month: billingMonth,
           });
 
-          // Generate bills
-          const billPayloads = generateMessBills(expense, hostelStudents, consumptions, { charges });
-
-          // Insert bills
-          await MessBill.insertMany(billPayloads);
-
-          console.log(
-            `[CRON] Successfully generated ${billPayloads.length} bills for hostel ${hostel.name}`
-          );
+          await runInTransaction(async (session) => {
+            const billPayloads = generateMessBills(expense, hostelStudents, consumptions, { charges });
+            await MessBill.insertMany(billPayloads, { session });
+            logger.info('[CRON] Bills generated for hostel', {
+              hostel: hostel.name,
+              billingMonth,
+              count: billPayloads.length,
+            });
+          });
         } catch (hostelError) {
-          console.error(`[CRON] Error processing hostel ${hostel.name}:`, hostelError.message);
+          logger.error('[CRON] Error processing hostel', {
+            hostel: hostel.name,
+            error: hostelError.message,
+            stack: hostelError.stack,
+          });
         }
       }
 
-      console.log('[CRON] Bill generation completed successfully');
+      logger.info('[CRON] Bill generation completed successfully');
     } catch (error) {
-      console.error('[CRON] Error in bill generation:', error.message);
+      logger.error('[CRON] Error in bill generation', {
+        error: error.message,
+        stack: error.stack,
+      });
     }
   });
 
-  console.log('[CRON] Bill generation job scheduled (1st of each month at 00:00)');
+  logger.info('[CRON] Bill generation job scheduled (1st of each month at 00:00)');
 };
 
 module.exports = {

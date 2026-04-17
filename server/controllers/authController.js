@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Student = require("../models/Student");
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -23,25 +24,33 @@ const generateToken = (userId) => {
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
+    const normalizedIdentifier = username?.toLowerCase().trim();
 
     // 1. Validate input presence
     if (!username || !password) {
       return res.status(400).json({
         success: false,
-        message: "Username and password are required.",
+        message: "Email or student ID and password are required.",
       });
     }
 
     // 2. Find user by username (include password for comparison)
-    const user = await User.findOne({ username: username.toLowerCase().trim() }).select(
-      "+password"
-    );
+    const user = await User.findOne({
+      $or: [{ username: normalizedIdentifier }, { email: normalizedIdentifier }],
+    }).select("+password");
 
     if (!user) {
       // Use a generic message to avoid username enumeration
       return res.status(401).json({
         success: false,
         message: "Invalid credentials.",
+      });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: "This account is inactive. Please contact an administrator.",
       });
     }
 
@@ -65,9 +74,11 @@ const login = async (req, res) => {
         id: user._id,
         name: user.name,
         username: user.username,
+        email: user.email,
         role: user.role,
         hostelId: user.hostelId,
         isFirstLogin: user.isFirstLogin,
+        isActive: user.isActive,
       },
     });
   } catch (error) {
@@ -139,4 +150,55 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { login, changePassword };
+const getCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("-password")
+      .populate({ path: "hostelId", select: "name type location" });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: "This account is inactive. Please contact an administrator.",
+      });
+    }
+
+    let studentProfile = null;
+    if (user.role === "student") {
+      studentProfile = await Student.findOne({ userId: user._id }).select(
+        "studentId gender isEBL isActive createdAt"
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Current user fetched successfully.",
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          hostelId: user.hostelId,
+          isFirstLogin: user.isFirstLogin,
+          isActive: user.isActive,
+          isEBL: studentProfile ? studentProfile.isEBL : user.isEBL,
+          eblApproved: user.eblApproved,
+          eblRequestPending: user.eblRequestPending,
+          eblRejected: user.eblRejected,
+        },
+        studentProfile,
+      },
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+module.exports = { login, changePassword, getCurrentUser };

@@ -21,7 +21,7 @@ router.post("/add", protect, checkRole("admin"), addStudent);
  * @access Protected – admin or caretaker
  * @desc   Retrieve all student profiles with populated user data
  */
-router.get("/all", protect, checkRole("admin", "caretaker"), getAllStudents);
+router.get("/all", protect, checkRole("admin", "dean", "warden", "caretaker"), getAllStudents);
 
 /**
  * @route  PATCH /student/update/:id

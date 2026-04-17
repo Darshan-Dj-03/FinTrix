@@ -124,6 +124,26 @@ const messBillSchema = new mongoose.Schema(
       default: 0,
       min: [0, "additional_charge cannot be negative"],
     },
+    dynamic_charge_items: {
+      type: [
+        new mongoose.Schema(
+          {
+            title: {
+              type: String,
+              required: true,
+              trim: true,
+            },
+            amount: {
+              type: Number,
+              required: true,
+              min: [0, "dynamic charge item amount cannot be negative"],
+            },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
 
     // ── Unit Items ─────────────────────────────────────────────────────────────
 
@@ -182,6 +202,26 @@ const messBillSchema = new mongoose.Schema(
       min: [0, "paneer_total cannot be negative"],
     },
 
+    /**
+     * Direct milk amount recorded for this student for the month.
+     */
+    milk_amount: {
+      type: Number,
+      default: 0,
+      min: [0, "milk_amount cannot be negative"],
+    },
+
+    /**
+     * Total milk charge billed to the student.
+     * Because milk is recorded as an amount in consumption, this mirrors
+     * the direct billed amount for clarity in the bill snapshot.
+     */
+    milk_total: {
+      type: Number,
+      default: 0,
+      min: [0, "milk_total cannot be negative"],
+    },
+
     // ── Final Amount & Payment ─────────────────────────────────────────────────
 
     /**
@@ -209,6 +249,11 @@ const messBillSchema = new mongoose.Schema(
       default: 0,
       min: [0, "fine cannot be negative"],
     },
+    manual_fine: {
+      type: Number,
+      default: 0,
+      min: [0, "manual_fine cannot be negative"],
+    },
 
     /**
      * Due date for payment (typically 20th of the month after publication).
@@ -217,6 +262,28 @@ const messBillSchema = new mongoose.Schema(
     due_date: {
       type: Date,
       required: [true, "due_date is required"],
+    },
+    announcement_date: {
+      type: Date,
+      default: null,
+    },
+    student_payment_mode: {
+      type: String,
+      enum: {
+        values: ["cash", "upi", ""],
+        message: 'student_payment_mode must be "cash" or "upi"',
+      },
+      default: "",
+    },
+    student_payment_made_date: {
+      type: Date,
+      default: null,
+    },
+    student_utr_number: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: [100, "student_utr_number cannot exceed 100 characters"],
     },
 
     /**
@@ -227,10 +294,15 @@ const messBillSchema = new mongoose.Schema(
     payment_status: {
       type: String,
       enum: {
-        values: ["pending", "paid"],
-        message: 'payment_status must be "pending" or "paid"',
+        values: ["pending", "partial", "paid"],
+        message: 'payment_status must be "pending", "partial", or "paid"',
       },
       default: "pending",
+    },
+    amount_paid: {
+      type: Number,
+      default: 0,
+      min: [0, "amount_paid cannot be negative"],
     },
   },
   {
@@ -243,5 +315,8 @@ const messBillSchema = new mongoose.Schema(
  * This prevents accidental duplicate generation.
  */
 messBillSchema.index({ studentId: 1, month: 1 }, { unique: true });
+messBillSchema.index({ hostelId: 1, month: 1, payment_status: 1 });
+messBillSchema.index({ month: 1, hostelId: 1 });
+messBillSchema.index({ month: 1, hostelId: 1, due_date: 1 });
 
 module.exports = mongoose.model("MessBill", messBillSchema);

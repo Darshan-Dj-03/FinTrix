@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const logger = require("../utils/logger");
 
 /**
  * protect – verifies the Bearer JWT in the Authorization header.
@@ -38,9 +39,21 @@ const protect = async (req, res, next) => {
         .json({ success: false, message: "User belonging to this token no longer exists." });
     }
 
+    if (user.isActive === false) {
+      return res.status(401).json({
+        success: false,
+        message: "This account is inactive. Please contact an administrator.",
+      });
+    }
+
     req.user = user; // Attach user to request object
     next();
   } catch (error) {
+    logger.warn("Authentication failed", {
+      path: req.originalUrl,
+      error: error.message,
+    });
+
     // Handle specific JWT errors with clear messages
     if (error.name === "JsonWebTokenError") {
       return res.status(401).json({ success: false, message: "Invalid token." });

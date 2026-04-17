@@ -5,6 +5,13 @@ const MessBill = require("../models/MessBill");
 const Payment = require("../models/Payment");
 const Charge = require("../models/Charge");
 const Hostel = require("../models/Hostel");
+const {
+  notifyReportStakeholders,
+  notifyCaretakerApproval,
+} = require("../services/notificationService");
+const { runInTransaction } = require("../utils/transaction");
+const { createAuditLog } = require("../services/auditService");
+const logger = require("../utils/logger");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 
@@ -15,7 +22,7 @@ const resolveHostelId = (req, providedHostelId) => {
   return providedHostelId || req.query.hostelId || req.body.hostelId || null;
 };
 
-const buildMonthlySnapshot = async (month, hostelFilter = null) => {
+const buildMonthlySnapshot = async (month, hostelFilter = null, session = null) => {
   const expenseMatch = { month };
   const billMatch = { month };
   const chargeMatch = { month };
@@ -47,39 +54,28 @@ const buildMonthlySnapshot = async (month, hostelFilter = null) => {
       },
     },
     { $group: { _id: null, total: { $sum: "$monthExpense" } } },
-  ]);
+  ]).session(session);
 
   const [chargeData] = await Charge.aggregate([
     { $match: chargeMatch },
     { $group: { _id: null, total: { $sum: "$amount" } } },
-  ]);
+  ]).session(session);
 
   const [billedData] = await MessBill.aggregate([
     { $match: billMatch },
     { $group: { _id: null, total: { $sum: "$total_amount" } } },
-  ]);
+  ]).session(session);
 
   const paymentPipeline = [
-    { $match: { month } },
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user",
-      },
-    },
-    { $unwind: "$user" },
+    { $match: { month, status: "paid" } },
   ];
 
   if (hostelFilter) {
-    paymentPipeline.push({
-      $match: { "user.hostelId": new mongoose.Types.ObjectId(hostelFilter) },
-    });
+    paymentPipeline.push({ $match: { hostelId: new mongoose.Types.ObjectId(hostelFilter) } });
   }
 
-  paymentPipeline.push({ $group: { _id: null, total: { $sum: "$amountPaid" } } });
-  const paymentData = await Payment.aggregate(paymentPipeline);
+  paymentPipeline.push({ $group: { _id: null, total: { $sum: "$amount" } } });
+  const paymentData = await Payment.aggregate(paymentPipeline).session(session);
 
   const hostelWiseBreakdown = await MessBill.aggregate([
     { $match: billMatch },
@@ -108,7 +104,7 @@ const buildMonthlySnapshot = async (month, hostelFilter = null) => {
         totalStudents: 1,
       },
     },
-  ]);
+  ]).session(session);
 
   const studentWiseSummary = await MessBill.aggregate([
     { $match: billMatch },
@@ -141,7 +137,7 @@ const buildMonthlySnapshot = async (month, hostelFilter = null) => {
       },
     },
     { $sort: { name: 1 } },
-  ]);
+  ]).session(session);
 
   const totalExpenses = Number(expenseData?.total || 0) + Number(chargeData?.total || 0);
   const totalBilled = Number(billedData?.total || 0);
@@ -155,17 +151,42 @@ const buildMonthlySnapshot = async (month, hostelFilter = null) => {
     outstanding,
     hostelWiseBreakdown,
     studentWiseSummary,
+    snapshot: {
+      generatedAt: new Date(),
+      expenses: {
+        baseExpenses: Number(expenseData?.total || 0),
+      },
+      charges: {
+        dynamicCharges: Number(chargeData?.total || 0),
+      },
+      payments: {
+        collected: totalCollected,
+      },
+      totals: {
+        totalExpenses,
+        totalBilled,
+        totalCollected,
+        outstanding,
+      },
+    },
   };
 };
 
-const getReportByMonthAndScope = async (month, hostelId) =>
-  Report.findOne({ month, hostelId }).populate([
+const getReportByMonthAndScope = (month, hostelId, session = null) => {
+  const query = Report.findOne({ month, hostelId }).populate([
     { path: "hostelId", select: "name type location" },
     { path: "generatedBy", select: "name username role" },
     { path: "submittedBy", select: "name username role" },
     { path: "approvedByWarden", select: "name username role" },
     { path: "approvedByDean", select: "name username role" },
   ]);
+
+  if (session) {
+    query.session(session);
+  }
+
+  return query;
+};
 
 const generateReport = async (req, res) => {
   try {
@@ -184,49 +205,78 @@ const generateReport = async (req, res) => {
       return res.status(404).json({ success: false, message: "Hostel not found." });
     }
 
-    const snapshot = await buildMonthlySnapshot(month, hostelId);
-    let report = await Report.findOne({ month, hostelId });
+    const populated = await runInTransaction(async (session) => {
+      const snapshot = await buildMonthlySnapshot(month, hostelId, session);
+      let report = await Report.findOne({ month, hostelId }).session(session);
 
-    if (report && report.status !== "draft") {
-      return res.status(409).json({
-        success: false,
-        message: "Report is already submitted or approved and cannot be regenerated.",
+      if (report && report.status !== "draft") {
+        const error = new Error("Report is already submitted or approved and cannot be regenerated.");
+        error.status = 409;
+        throw error;
+      }
+
+      if (!report) {
+        [report] = await Report.create(
+          [
+            {
+              month,
+              hostelId,
+              status: "draft",
+              generatedBy: req.user._id,
+              ...snapshot,
+            },
+          ],
+          { session }
+        );
+      } else {
+        report.generatedBy = req.user._id;
+        report.totalExpenses = snapshot.totalExpenses;
+        report.totalBilled = snapshot.totalBilled;
+        report.totalCollected = snapshot.totalCollected;
+        report.outstanding = snapshot.outstanding;
+        report.hostelWiseBreakdown = snapshot.hostelWiseBreakdown;
+        report.studentWiseSummary = snapshot.studentWiseSummary;
+        report.snapshot = snapshot.snapshot;
+        await report.save({ session });
+      }
+
+      await createAuditLog({
+        action: "REPORT_GENERATED",
+        performedBy: req.user._id,
+        role: req.user.role,
+        entityId: report._id,
+        entityType: "Report",
+        metadata: {
+          month,
+          hostelId,
+          totals: snapshot.snapshot.totals,
+        },
+        session,
       });
-    }
 
-    if (!report) {
-      report = await Report.create({
-        month,
-        hostelId,
-        status: "draft",
-        generatedBy: req.user._id,
-        ...snapshot,
-      });
-    } else {
-      report.generatedBy = req.user._id;
-      report.totalExpenses = snapshot.totalExpenses;
-      report.totalBilled = snapshot.totalBilled;
-      report.totalCollected = snapshot.totalCollected;
-      report.outstanding = snapshot.outstanding;
-      report.hostelWiseBreakdown = snapshot.hostelWiseBreakdown;
-      report.studentWiseSummary = snapshot.studentWiseSummary;
-      await report.save();
-    }
+      return getReportByMonthAndScope(month, hostelId, session);
+    });
 
-    const populated = await getReportByMonthAndScope(month, hostelId);
+    await notifyReportStakeholders({
+      month,
+      hostelId,
+      triggeredByName: req.user.name,
+      triggerLabel: "The main billing report has been generated",
+    });
+
     return res.status(201).json({
       success: true,
       message: "Report generated successfully.",
       data: populated,
     });
   } catch (error) {
-    if (error.code === 11000) {
+    if (error.code === 11000 || error.status === 409) {
       return res.status(409).json({
         success: false,
-        message: "Report already exists for this hostel and month.",
+        message: error.message || "Report already exists for this hostel and month.",
       });
     }
-    console.error("Generate report error:", error);
+    logger.error("Generate report error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };
@@ -255,20 +305,53 @@ const submitReport = async (req, res) => {
       });
     }
 
-    report.status = "submitted";
-    report.submittedBy = req.user._id;
-    report.submittedAt = new Date();
-    await report.save();
+    const populated = await runInTransaction(async (session) => {
+      const transactionalReport = await Report.findOne({ month, hostelId }).session(session);
+      if (!transactionalReport) {
+        const error = new Error("Report not found.");
+        error.status = 404;
+        throw error;
+      }
 
-    const populated = await getReportByMonthAndScope(month, hostelId);
+      if (transactionalReport.status !== "draft") {
+        const error = new Error("Only draft reports can be submitted.");
+        error.status = 400;
+        throw error;
+      }
+
+      transactionalReport.status = "submitted";
+      transactionalReport.submittedBy = req.user._id;
+      transactionalReport.submittedAt = new Date();
+      await transactionalReport.save({ session });
+
+      await createAuditLog({
+        action: "REPORT_SUBMITTED",
+        performedBy: req.user._id,
+        role: req.user.role,
+        entityId: transactionalReport._id,
+        entityType: "Report",
+        metadata: { month, hostelId },
+        session,
+      });
+
+      return getReportByMonthAndScope(month, hostelId, session);
+    });
+
+    await notifyReportStakeholders({
+      month,
+      hostelId,
+      triggeredByName: req.user.name,
+      triggerLabel: "The main billing report has been submitted",
+    });
+
     return res.status(200).json({
       success: true,
       message: "Report submitted successfully.",
       data: populated,
     });
   } catch (error) {
-    console.error("Submit report error:", error);
-    return res.status(500).json({ success: false, message: "Server error." });
+    logger.error("Submit report error", { error: error.message, stack: error.stack });
+    return res.status(error.status || 500).json({ success: false, message: error.message || "Server error." });
   }
 };
 
@@ -308,23 +391,71 @@ const wardenApprove = async (req, res) => {
       });
     }
 
-    report.status = "warden_approved";
-    report.approvedByWarden = req.user._id;
-    report.wardenApprovedAt = new Date();
-    if (notes) {
-      report.wardenNotes = notes;
-    }
-    await report.save();
+    const populated = await runInTransaction(async (session) => {
+      const transactionalReport = await Report.findOne({ month, hostelId }).session(session);
+      if (!transactionalReport) {
+        const error = new Error("Report not found.");
+        error.status = 404;
+        throw error;
+      }
 
-    const populated = await getReportByMonthAndScope(month, hostelId);
+      if (transactionalReport.status !== "submitted") {
+        const error = new Error("Warden approval is allowed only after submission.");
+        error.status = 400;
+        throw error;
+      }
+
+      if (transactionalReport.approvedByWarden) {
+        const error = new Error("Report already approved by warden.");
+        error.status = 409;
+        throw error;
+      }
+
+      transactionalReport.status = "warden_approved";
+      transactionalReport.approvedByWarden = req.user._id;
+      transactionalReport.wardenApprovedAt = new Date();
+      if (notes) {
+        transactionalReport.wardenNotes = notes;
+      }
+      await transactionalReport.save({ session });
+
+      await createAuditLog({
+        action: "REPORT_WARDEN_APPROVED",
+        performedBy: req.user._id,
+        role: req.user.role,
+        entityId: transactionalReport._id,
+        entityType: "Report",
+        metadata: { month, hostelId, notes: notes || "" },
+        session,
+      });
+
+      return getReportByMonthAndScope(month, hostelId, session);
+    });
+
+    await Promise.all([
+      notifyReportStakeholders({
+        month,
+        hostelId,
+        triggeredByName: req.user.name,
+        triggerLabel: "The main billing report has been approved by the warden",
+      }),
+      notifyCaretakerApproval({
+        month,
+        hostelId,
+        approverRole: "Warden",
+        approverName: req.user.name,
+        notes: notes || "",
+      }),
+    ]);
+
     return res.status(200).json({
       success: true,
       message: "Report approved by warden successfully.",
       data: populated,
     });
   } catch (error) {
-    console.error("Warden approval error:", error);
-    return res.status(500).json({ success: false, message: "Server error." });
+    logger.error("Warden approval error", { error: error.message, stack: error.stack });
+    return res.status(error.status || 500).json({ success: false, message: error.message || "Server error." });
   }
 };
 
@@ -364,23 +495,71 @@ const deanApprove = async (req, res) => {
       });
     }
 
-    report.status = "dean_approved";
-    report.approvedByDean = req.user._id;
-    report.deanApprovedAt = new Date();
-    if (notes) {
-      report.deanNotes = notes;
-    }
-    await report.save();
+    const populated = await runInTransaction(async (session) => {
+      const transactionalReport = await Report.findOne({ month, hostelId }).session(session);
+      if (!transactionalReport) {
+        const error = new Error("Report not found.");
+        error.status = 404;
+        throw error;
+      }
 
-    const populated = await getReportByMonthAndScope(month, hostelId);
+      if (transactionalReport.status !== "warden_approved") {
+        const error = new Error("Dean approval is allowed only after warden approval.");
+        error.status = 400;
+        throw error;
+      }
+
+      if (transactionalReport.approvedByDean) {
+        const error = new Error("Report already approved by dean/admin.");
+        error.status = 409;
+        throw error;
+      }
+
+      transactionalReport.status = "dean_approved";
+      transactionalReport.approvedByDean = req.user._id;
+      transactionalReport.deanApprovedAt = new Date();
+      if (notes) {
+        transactionalReport.deanNotes = notes;
+      }
+      await transactionalReport.save({ session });
+
+      await createAuditLog({
+        action: "REPORT_DEAN_APPROVED",
+        performedBy: req.user._id,
+        role: req.user.role,
+        entityId: transactionalReport._id,
+        entityType: "Report",
+        metadata: { month, hostelId, notes: notes || "" },
+        session,
+      });
+
+      return getReportByMonthAndScope(month, hostelId, session);
+    });
+
+    await Promise.all([
+      notifyReportStakeholders({
+        month,
+        hostelId,
+        triggeredByName: req.user.name,
+        triggerLabel: "The main billing report has been approved by the dean/admin",
+      }),
+      notifyCaretakerApproval({
+        month,
+        hostelId,
+        approverRole: "Dean/Admin",
+        approverName: req.user.name,
+        notes: notes || "",
+      }),
+    ]);
+
     return res.status(200).json({
       success: true,
       message: "Report approved by dean/admin successfully.",
       data: populated,
     });
   } catch (error) {
-    console.error("Dean approval error:", error);
-    return res.status(500).json({ success: false, message: "Server error." });
+    logger.error("Dean approval error", { error: error.message, stack: error.stack });
+    return res.status(error.status || 500).json({ success: false, message: error.message || "Server error." });
   }
 };
 
@@ -435,7 +614,8 @@ const getFullMonthlyReport = async (req, res) => {
       });
     }
 
-    const snapshot = await buildMonthlySnapshot(month, hostelId || null);
+    const report = hostelId ? await Report.findOne({ month, hostelId }) : null;
+    const snapshot = report ? report.toObject() : await buildMonthlySnapshot(month, hostelId || null);
 
     return res.status(200).json({
       success: true,
@@ -444,11 +624,11 @@ const getFullMonthlyReport = async (req, res) => {
         month,
         hostelId: hostelId || null,
         ...snapshot,
-        generatedAt: new Date(),
+        generatedAt: report?.snapshot?.generatedAt || new Date(),
       },
     });
   } catch (error) {
-    console.error("Get full report error:", error);
+    logger.error("Get full report error", { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };

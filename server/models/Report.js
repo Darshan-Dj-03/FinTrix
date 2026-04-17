@@ -127,6 +127,28 @@ const reportSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    snapshot: {
+      generatedAt: {
+        type: Date,
+        default: null,
+      },
+      expenses: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+      charges: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+      payments: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+      totals: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+    },
   },
   { timestamps: true }
 );

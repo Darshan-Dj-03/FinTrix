@@ -10,8 +10,35 @@
  * @param {number} value
  * @returns {number}
  */
-const roundTwoDecimals = (value) => {
-  return Math.round(value * 100) / 100;
+const { roundUpCurrency, calculateDynamicFine } = require("./billLifecycleService");
+
+const roundTwoDecimals = (value) => Math.round(value * 100) / 100;
+
+const MONTH_INDEX = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+};
+
+const getDaysInMonth = (month) => {
+  const [monthLabel, yearLabel] = String(month || "").split("-");
+  const monthIndex = MONTH_INDEX[monthLabel];
+  const year = Number.parseInt(yearLabel, 10);
+
+  if (monthIndex === undefined || Number.isNaN(year)) {
+    return 0;
+  }
+
+  return new Date(year, monthIndex + 1, 0).getDate();
 };
 
 /**
@@ -56,21 +83,7 @@ const calculateFine = (dueDate, currentDate = new Date(), isEBL = false, eblExem
   if (isEBL && eblExemptFine) {
     return 0;
   }
-
-  // Calculate days late
-  const daysLate = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
-
-  if (daysLate <= 0) {
-    // Bill not yet due
-    return 0;
-  }
-
-  if (daysLate <= 30) {
-    return daysLate * 2;
-  }
-
-  // More than 30 days late: escalated fine
-  return (30 * 2) + ((daysLate - 30) * 5);
+  return calculateDynamicFine(dueDate, currentDate);
 };
 
 /**
@@ -94,7 +107,13 @@ const calculateFine = (dueDate, currentDate = new Date(), isEBL = false, eblExem
  * @throws {Error} – If validation fails (e.g., no active students)
  */
 const generateMessBills = (expense, students, consumptionRecords = [], options = {}) => {
-  const { eblExemptFine = true, currentDate = new Date(), charges = [] } = options;
+  const {
+    eblExemptFine = true,
+    currentDate = new Date(),
+    charges = [],
+    dueDate = null,
+    announcementDate = null,
+  } = options;
 
   // ─── 1. Validate inputs ────────────────────────────────────────────────────────
   if (!expense) {
@@ -127,13 +146,33 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       egg_count: record.egg_count || 0,
       chicken_count: record.chicken_count || 0,
       paneer_count: record.paneer_count || 0,
+      milk_amount: record.milk_amount || 0,
+      fine_amount: record.fine_amount || 0,
+      absent_days: record.absent_days || 0,
     };
   });
 
   // ─── 4. Calculate per-unit charges ─────────────────────────────────────────────
   // Base mess
-  const baseMeasTotal = expense.elp + expense.cylinder + expense.oil + expense.kirana + expense.milk;
-  const baseMessPerStudent = roundTwoDecimals(baseMeasTotal / totalActiveStudents);
+  const hasExplicitMilkAmounts = consumptionRecords.some((record) => Number(record.milk_amount || 0) > 0);
+  const daysInMonth = getDaysInMonth(expense.month);
+  const baseMessMonthly = expense.mess_bill_per_day
+    ? roundTwoDecimals(expense.mess_bill_per_day * daysInMonth)
+    : expense.mess_bill_total
+      ? roundTwoDecimals(expense.mess_bill_total)
+      : roundTwoDecimals(
+          expense.elp
+            + expense.cylinder
+            + expense.oil
+            + expense.kirana
+            + (hasExplicitMilkAmounts ? 0 : expense.milk)
+        );
+  const derivedMessBillPerDay =
+    Number(expense.mess_bill_per_day || 0) > 0
+      ? Number(expense.mess_bill_per_day || 0)
+      : daysInMonth > 0
+        ? roundTwoDecimals(baseMessMonthly / daysInMonth)
+        : 0;
 
   // KEB (electricity) – split by gender
   let kebChargePerStudent = 0; // default for assignment
@@ -148,52 +187,72 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
   const kebBoysPerStudent = totalBoys > 0 ? roundTwoDecimals(expense.keb_boys / totalBoys) : 0;
 
   // Labour
-  const labourChargePerStudent = roundTwoDecimals(expense.labour_total / totalActiveStudents);
+  const labourChargePerStudent = roundUpCurrency(expense.labour_total / totalActiveStudents);
 
   // Night watch (girls only)
-  const nightWatchChargePerStudent = totalGirls > 0 ? roundTwoDecimals(expense.night_watch_total / totalGirls) : 0;
+  const nightWatchChargePerStudent = totalGirls > 0 ? roundUpCurrency(expense.night_watch_total / totalGirls) : 0;
 
   // Bakery + Banana
-  const bakeryBananaTotalAmount = expense.bakery_total + expense.banana_total;
-  const bakeryChargePerStudent = roundTwoDecimals(bakeryBananaTotalAmount / totalActiveStudents);
+  const bakeryBananaTotalAmount = expense.banana_bakery_total || (expense.bakery_total + expense.banana_total);
+  const bakeryChargePerStudent = roundUpCurrency(bakeryBananaTotalAmount / totalActiveStudents);
 
   // Dynamic charges
-  const totalDynamicCharges = charges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
-  const additionalChargePerStudent =
-    totalActiveStudents > 0 ? roundTwoDecimals(totalDynamicCharges / totalActiveStudents) : 0;
+  const dynamicChargeItems = charges
+    .map((charge) => ({
+      title: charge.title || "Static Charge",
+      amount: roundTwoDecimals(Number(charge.amount) || 0),
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const totalDynamicCharges = dynamicChargeItems.reduce((sum, charge) => sum + charge.amount, 0);
 
   // ─── 5. Generate bill for each active student ──────────────────────────────────
   const bills = activeStudents.map((student) => {
     const studentIdStr = student._id.toString();
-    const consumption = consumptionMap[studentIdStr] || { egg_count: 0, chicken_count: 0, paneer_count: 0 };
+    const consumption = consumptionMap[studentIdStr] || {
+      egg_count: 0,
+      chicken_count: 0,
+      paneer_count: 0,
+      milk_amount: 0,
+      fine_amount: 0,
+      absent_days: 0,
+    };
 
     // Determine KEB charge based on student gender
-    const kebCharge = student.gender === "female" ? kebGirlsPerStudent : kebBoysPerStudent;
+    const kebCharge = roundUpCurrency(student.gender === "female" ? kebGirlsPerStudent : kebBoysPerStudent);
 
     // Night watch only for girls
-    const nightWatchCharge = student.gender === "female" ? nightWatchChargePerStudent : 0;
+    const nightWatchCharge = student.gender === "female" ? roundUpCurrency(nightWatchChargePerStudent) : 0;
 
     // Unit item totals
-    const eggTotal = roundTwoDecimals(expense.egg_price * consumption.egg_count);
-    const chickenTotal = roundTwoDecimals(expense.chicken_price * consumption.chicken_count);
-    const paneerTotal = roundTwoDecimals(expense.paneer_price * consumption.paneer_count);
+    const eggTotal = roundUpCurrency(expense.egg_price * consumption.egg_count);
+    const chickenTotal = roundUpCurrency(expense.chicken_price * consumption.chicken_count);
+    const paneerTotal = roundUpCurrency(expense.paneer_price * consumption.paneer_count);
+    const milkTotal = roundUpCurrency(consumption.milk_amount);
+    const absentDays = Math.max(0, Math.min(getDaysInMonth(expense.month), Number(consumption.absent_days || 0)));
+    const billableDays = Math.max(getDaysInMonth(expense.month) - absentDays, 0);
+    const baseMessCharge =
+      billableDays < daysInMonth
+        ? roundUpCurrency(derivedMessBillPerDay * billableDays)
+        : roundUpCurrency(baseMessMonthly);
 
     // Total amount
-    const totalAmount = roundTwoDecimals(
-      baseMessPerStudent
+    const totalAmount = roundUpCurrency(
+      baseMessCharge
         + kebCharge
         + labourChargePerStudent
         + nightWatchCharge
         + bakeryChargePerStudent
-        + additionalChargePerStudent
+        + totalDynamicCharges
         + eggTotal
         + chickenTotal
         + paneerTotal
+        + milkTotal
     );
 
     // Due date and fine
-    const dueDate = calculateDueDate(expense.month);
-    const fine = roundTwoDecimals(calculateFine(dueDate, currentDate, student.isEBL, eblExemptFine));
+    const resolvedDueDate = dueDate ? new Date(dueDate) : calculateDueDate(expense.month);
+    const manualFine = roundUpCurrency(consumption.fine_amount);
+    const fine = student.isEBL && eblExemptFine ? 0 : manualFine;
 
     // Construct bill payload
     return {
@@ -203,12 +262,13 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       month: expense.month,
 
       // Charges
-      base_mess: baseMessPerStudent,
+      base_mess: baseMessCharge,
       keb_charge: kebCharge,
       labour_charge: labourChargePerStudent,
       night_watch_charge: nightWatchCharge,
       bakery_charge: bakeryChargePerStudent,
-      additional_charge: additionalChargePerStudent,
+      additional_charge: totalDynamicCharges,
+      dynamic_charge_items: dynamicChargeItems,
 
       // Unit items
       egg_count: consumption.egg_count,
@@ -217,12 +277,22 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       chicken_total: chickenTotal,
       paneer_count: consumption.paneer_count,
       paneer_total: paneerTotal,
+      milk_amount: consumption.milk_amount,
+      milk_total: milkTotal,
+      absent_days: absentDays,
+      billable_days: billableDays,
 
       // Final
       total_amount: totalAmount,
       fine,
-      due_date: dueDate,
+      manual_fine: fine,
+      due_date: resolvedDueDate,
+      announcement_date: announcementDate ? new Date(announcementDate) : null,
+      student_payment_mode: "",
+      student_payment_made_date: null,
+      student_utr_number: "",
       payment_status: "pending",
+      amount_paid: 0,
     };
   });
 

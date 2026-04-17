@@ -1,5 +1,12 @@
 const Student = require('../models/Student');
 
+const isOperationalStudent = (student) =>
+  Boolean(
+    student &&
+      student.isActive !== false &&
+      (!student.userId || student.userId.isActive !== false)
+  );
+
 /**
  * Check if user owns the student record
  * Used for student self-access verification
@@ -11,6 +18,10 @@ const checkOwnership = (studentParamName = 'studentId') => {
       const student = await Student.findById(studentId);
 
       if (!student) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+
+      if (!isOperationalStudent(student)) {
         return res.status(404).json({ success: false, message: 'Student not found' });
       }
 
@@ -51,6 +62,10 @@ const restrictToHostel = (studentParamName = 'studentId') => {
       const student = await Student.findById(studentId).populate('userId');
 
       if (!student) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+
+      if (!isOperationalStudent(student)) {
         return res.status(404).json({ success: false, message: 'Student not found' });
       }
 

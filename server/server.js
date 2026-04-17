@@ -1,84 +1,50 @@
-// Load environment variables first – must be before any other imports
-require("dotenv").config();
+require("./config/env");
 
-const express = require("express");
-const cors = require("cors");
+const mongoose = require("mongoose");
 const connectDB = require("./config/db");
+const app = require("./app");
+const { scheduleBillGeneration } = require("./jobs/billCron");
+const logger = require("./utils/logger");
 
-// ─── Route Imports ────────────────────────────────────────────────────────────
-const authRoutes    = require("./routes/authRoutes");
-const adminRoutes   = require("./routes/adminRoutes");
-const studentRoutes = require("./routes/studentRoutes");
-const hostelRoutes  = require("./routes/hostelRoutes");
-const expenseRoutes = require("./routes/expenseRoutes");
-const billRoutes    = require("./routes/billRoutes");
-const reportRoutes  = require("./routes/reportRoutes");
-const eblRoutes     = require("./routes/eblRoutes");
-const chargeRoutes  = require("./routes/chargeRoutes");
-const ledgerRoutes  = require("./routes/ledgerRoutes");
-
-// ─── App Initialisation ───────────────────────────────────────────────────────
-const app = express();
-
-// ─── Database Connection ──────────────────────────────────────────────────────
-connectDB();
-
-// ─── Global Middleware ────────────────────────────────────────────────────────
-app.use(express.json());
-
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
-// ─── Routes ─────────────────────────────────────────────────────────────
-app.use("/auth", authRoutes);
-app.use("/admin", adminRoutes);
-app.use("/student", studentRoutes);
-app.use("/hostel", hostelRoutes);
-app.use("/expense", expenseRoutes);
-app.use("/bill", billRoutes);
-app.use("/report", reportRoutes);
-app.use("/ebl", eblRoutes);
-app.use("/charges", chargeRoutes);
-app.use("/ledger", ledgerRoutes);
-
-// ─── Health Check ─────────────────────────────────────────────────────────────
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Fintrix API is running.",
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// ─── 404 Handler ─────────────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found.`,
-  });
-});
-
-// ─── Global Error Handler ─────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err.stack);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal Server Error.",
-  });
-});
-
-// ─── Server Start ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
 
-// ⚡ Start server only if NOT running tests
-if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, HOST, () => {
-    console.log(`🚀 Fintrix server running on http://${HOST}:${PORT}`);
+let server;
+
+const startServer = async () => {
+  await connectDB();
+
+  if (process.env.NODE_CRON_ENABLED !== "false") {
+    scheduleBillGeneration();
+  }
+
+  server = app.listen(PORT, HOST, () => {
+    logger.info("Fintrix server started", { host: HOST, port: PORT });
   });
+};
+
+const shutdown = async (signal) => {
+  logger.info("Graceful shutdown initiated", { signal });
+
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  await mongoose.connection.close();
+  process.exit(0);
+};
+
+if (process.env.NODE_ENV !== "test") {
+  startServer().catch((error) => {
+    logger.error("Server failed to start", {
+      error: error.message,
+      stack: error.stack,
+    });
+    process.exit(1);
+  });
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
+
+module.exports = { startServer };

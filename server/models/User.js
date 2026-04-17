@@ -20,6 +20,13 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true,
+    },
 
     password: {
       type: String,
@@ -46,6 +53,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
 
     isEBL: {
       type: Boolean,
@@ -58,6 +69,10 @@ const userSchema = new mongoose.Schema(
     },
 
     eblRequestPending: {
+      type: Boolean,
+      default: false,
+    },
+    eblRejected: {
       type: Boolean,
       default: false,
     },

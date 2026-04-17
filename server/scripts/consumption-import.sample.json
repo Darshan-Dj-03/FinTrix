@@ -1,0 +1,997 @@
+
+{
+  "records": [
+    {
+      "studentId": "UHS25HE001",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE002",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE003",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE004",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE005",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE006",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE007",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE008",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE009",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE010",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE011",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE012",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE013",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE014",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE015",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE016",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE017",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE018",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE019",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE020",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE021",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE022",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 1,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE023",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE024",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE025",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE026",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE027",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE028",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE029",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE030",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE031",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE032",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE033",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE034",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE035",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE036",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE037",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE038",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE039",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE040",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE041",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE042",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE043",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE044",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE045",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE046",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE047",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE048",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE049",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE050",
+      "month": "Apr-2026",
+      "egg_count": 2,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE051",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE052",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE053",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE054",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE055",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE056",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE057",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE058",
+      "month": "Apr-2026",
+      "egg_count": 6,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 300
+    },
+    {
+      "studentId": "UHS25HE059",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE060",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE061",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE062",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE063",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE064",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE065",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE066",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE067",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE068",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE069",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE070",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE071",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE072",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE073",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE074",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE075",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE076",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE077",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE078",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE079",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE080",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE081",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE082",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE083",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE084",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE085",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE086",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE087",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE088",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE089",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE090",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE091",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE092",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE093",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE094",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE095",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE096",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE097",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE098",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE099",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE100",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE101",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE102",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE103",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE104",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE105",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE106",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE107",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE108",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE109",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE110",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE111",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE112",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE113",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE114",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE115",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE116",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 1,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE117",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 0,
+      "paneer_count": 2,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE118",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE119",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE120",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE121",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 1,
+      "paneer_count": 1,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE122",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 2,
+      "paneer_count": 0,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE123",
+      "month": "Apr-2026",
+      "egg_count": 0,
+      "chicken_count": 0,
+      "paneer_count": 3,
+      "milk_amount": 0
+    },
+    {
+      "studentId": "UHS25HE124",
+      "month": "Apr-2026",
+      "egg_count": 3,
+      "chicken_count": 3,
+      "paneer_count": 0,
+      "milk_amount": 0
+    }
+  ]
+}

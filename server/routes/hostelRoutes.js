@@ -7,14 +7,14 @@ const { checkRole } = require("../middleware/roleMiddleware");
 
 /**
  * @route  POST /hostel/create
- * @access Protected – admin only
+ * @access Protected - admin only
  */
 router.post("/create", protect, checkRole("admin"), createHostel);
 
 /**
  * @route  GET /hostel/all
- * @access Protected – admin only
+ * @access Protected - admin, dean, warden
  */
-router.get("/all", protect, checkRole("admin"), getAllHostels);
+router.get("/all", protect, checkRole("admin", "dean", "warden"), getAllHostels);
 
 module.exports = router;

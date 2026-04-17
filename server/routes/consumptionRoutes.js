@@ -1,88 +1,103 @@
-const express = require('express');
-const { body, param } = require('express-validator');
-const { protect } = require('../middleware/authMiddleware');
-const { checkRole } = require('../middleware/roleMiddleware');
+const express = require("express");
+const { body, param } = require("express-validator");
+
+const { protect } = require("../middleware/authMiddleware");
+const { checkRole } = require("../middleware/roleMiddleware");
+const { validateRequest } = require("../middleware/validationMiddleware");
 const {
   addConsumption,
   updateConsumption,
   getConsumption,
   deleteConsumption,
   getConsumptionByMonth,
-} = require('../controllers/consumptionController');
+  bulkUpsertConsumption,
+} = require("../controllers/consumptionController");
+
+const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 
 const router = express.Router();
 
-/**
- * POST /consumption/add
- * Add new consumption record (Caretaker only)
- */
 router.post(
-  '/add',
+  "/bulk-upsert",
   protect,
-  checkRole('caretaker'),
+  checkRole("caretaker"),
   [
-    body('studentId').isMongoId().withMessage('Invalid student ID'),
-    body('month').matches(/^\d{4}-\d{2}$/).withMessage('Month must be in YYYY-MM format'),
-    body('eggCount').optional().isInt({ min: 0 }).withMessage('Egg count must be non-negative'),
-    body('chickenCount').optional().isInt({ min: 0 }).withMessage('Chicken count must be non-negative'),
-    body('paneerCount').optional().isInt({ min: 0 }).withMessage('Paneer count must be non-negative'),
+    body("month").matches(MONTH_REGEX).withMessage('Month must be in Mon-YYYY format'),
+    body("records").isArray({ min: 1 }).withMessage("records must be a non-empty array"),
+    body("records.*.studentId").isMongoId().withMessage("Each studentId must be valid"),
+    body("records.*.egg_count").optional().isInt({ min: 0 }).withMessage("Egg count must be non-negative"),
+    body("records.*.chicken_count").optional().isInt({ min: 0 }).withMessage("Chicken count must be non-negative"),
+    body("records.*.paneer_count").optional().isInt({ min: 0 }).withMessage("Paneer count must be non-negative"),
+    body("records.*.milk_amount").optional().isFloat({ min: 0 }).withMessage("Milk amount must be non-negative"),
+    body("records.*.fine_amount").optional().isFloat({ min: 0 }).withMessage("Fine amount must be non-negative"),
+    body("records.*.absent_days").optional().isInt({ min: 0 }).withMessage("Absent days must be non-negative"),
   ],
+  validateRequest,
+  bulkUpsertConsumption
+);
+
+router.post(
+  "/add",
+  protect,
+  checkRole("caretaker"),
+  [
+    body("studentId").isMongoId().withMessage("Invalid student ID"),
+    body("month").matches(MONTH_REGEX).withMessage('Month must be in Mon-YYYY format'),
+    body("egg_count").optional().isInt({ min: 0 }).withMessage("Egg count must be non-negative"),
+    body("chicken_count").optional().isInt({ min: 0 }).withMessage("Chicken count must be non-negative"),
+    body("paneer_count").optional().isInt({ min: 0 }).withMessage("Paneer count must be non-negative"),
+    body("milk_amount").optional().isFloat({ min: 0 }).withMessage("Milk amount must be non-negative"),
+    body("fine_amount").optional().isFloat({ min: 0 }).withMessage("Fine amount must be non-negative"),
+    body("absent_days").optional().isInt({ min: 0 }).withMessage("Absent days must be non-negative"),
+  ],
+  validateRequest,
   addConsumption
 );
 
-/**
- * PUT /consumption/update/:id
- * Update consumption record (Caretaker only)
- */
 router.put(
-  '/update/:id',
+  "/update/:id",
   protect,
-  checkRole('caretaker'),
+  checkRole("caretaker"),
   [
-    param('id').isMongoId().withMessage('Invalid consumption ID'),
-    body('eggCount').optional().isInt({ min: 0 }).withMessage('Egg count must be non-negative'),
-    body('chickenCount').optional().isInt({ min: 0 }).withMessage('Chicken count must be non-negative'),
-    body('paneerCount').optional().isInt({ min: 0 }).withMessage('Paneer count must be non-negative'),
+    param("id").isMongoId().withMessage("Invalid consumption ID"),
+    body("egg_count").optional().isInt({ min: 0 }).withMessage("Egg count must be non-negative"),
+    body("chicken_count").optional().isInt({ min: 0 }).withMessage("Chicken count must be non-negative"),
+    body("paneer_count").optional().isInt({ min: 0 }).withMessage("Paneer count must be non-negative"),
+    body("milk_amount").optional().isFloat({ min: 0 }).withMessage("Milk amount must be non-negative"),
+    body("fine_amount").optional().isFloat({ min: 0 }).withMessage("Fine amount must be non-negative"),
+    body("absent_days").optional().isInt({ min: 0 }).withMessage("Absent days must be non-negative"),
   ],
+  validateRequest,
   updateConsumption
 );
 
-/**
- * GET /consumption/:studentId/:month
- * Get consumption record (Student own/Caretaker hostel/Admin all)
- */
 router.get(
-  '/:studentId/:month',
+  "/month/:month",
+  protect,
+  checkRole("admin", "caretaker"),
+  [param("month").matches(MONTH_REGEX).withMessage('Month must be in Mon-YYYY format')],
+  validateRequest,
+  getConsumptionByMonth
+);
+
+router.get(
+  "/:studentId/:month",
   protect,
   [
-    param('studentId').isMongoId().withMessage('Invalid student ID'),
-    param('month').matches(/^\d{4}-\d{2}$/).withMessage('Month must be in YYYY-MM format'),
+    param("studentId").isMongoId().withMessage("Invalid student ID"),
+    param("month").matches(MONTH_REGEX).withMessage('Month must be in Mon-YYYY format'),
   ],
+  validateRequest,
   getConsumption
 );
 
-/**
- * DELETE /consumption/:id
- * Delete consumption record (Caretaker only)
- */
 router.delete(
-  '/:id',
+  "/:id",
   protect,
-  checkRole('caretaker'),
-  [param('id').isMongoId().withMessage('Invalid consumption ID')],
+  checkRole("caretaker"),
+  [param("id").isMongoId().withMessage("Invalid consumption ID")],
+  validateRequest,
   deleteConsumption
-);
-
-/**
- * GET /consumption/month/:month
- * Get all consumption records for month (Admin only)
- */
-router.get(
-  '/month/:month',
-  protect,
-  checkRole('admin'),
-  [param('month').matches(/^\d{4}-\d{2}$/).withMessage('Month must be in YYYY-MM format')],
-  getConsumptionByMonth
 );
 
 module.exports = router;
