@@ -26,17 +26,28 @@ export function LoginForm() {
         password: values.password,
       }),
     onSuccess: async (response) => {
-      setSession({ token: response.token, user: response.user, studentProfile: null });
+      setSession({
+        token: response.token,
+        refreshToken: response.refreshToken,
+        user: response.user,
+        studentProfile: response.studentProfile ?? null,
+      });
 
       try {
         const me = await authApi.getMe();
         setSession({
           token: response.token,
+          refreshToken: response.refreshToken,
           user: me.data.user,
           studentProfile: me.data.studentProfile,
         });
       } catch {
-        setSession({ token: response.token, user: response.user, studentProfile: null });
+        setSession({
+          token: response.token,
+          refreshToken: response.refreshToken,
+          user: response.user,
+          studentProfile: response.studentProfile ?? null,
+        });
       }
 
       toast.success("Welcome back to Fintrix.");

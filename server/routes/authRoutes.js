@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { login, changePassword, getCurrentUser, updateProfile } = require("../controllers/authController");
+const { login, refreshSession, changePassword, getCurrentUser, updateProfile } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 const { authRateLimiter } = require("../middleware/rateLimitMiddleware");
 
@@ -10,6 +10,7 @@ const { authRateLimiter } = require("../middleware/rateLimitMiddleware");
  * @access Public – no token required
  */
 router.post("/login", authRateLimiter, login);
+router.post("/refresh", authRateLimiter, refreshSession);
 
 /**
  * @route  POST /auth/change-password

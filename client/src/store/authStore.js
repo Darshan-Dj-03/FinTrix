@@ -21,17 +21,19 @@ const clearAuth = () => {
 
 export const useAuthStore = create((set, get) => ({
   token: readStoredAuth()?.token || null,
+  refreshToken: readStoredAuth()?.refreshToken || null,
   user: readStoredAuth()?.user || null,
   studentProfile: readStoredAuth()?.studentProfile || null,
   hydrated: false,
-  setSession: ({ token, user, studentProfile = null }) => {
-    const payload = { token, user, studentProfile };
+  setSession: ({ token, refreshToken = null, user, studentProfile = null }) => {
+    const payload = { token, refreshToken, user, studentProfile };
     persistAuth(payload);
     set({ ...payload, hydrated: true });
   },
   updateProfile: ({ user, studentProfile }) => {
     const nextState = {
       token: get().token,
+      refreshToken: get().refreshToken,
       user: user ?? get().user,
       studentProfile: studentProfile ?? get().studentProfile,
     };
@@ -40,7 +42,7 @@ export const useAuthStore = create((set, get) => ({
   },
   logout: () => {
     clearAuth();
-    set({ token: null, user: null, studentProfile: null, hydrated: true });
+    set({ token: null, refreshToken: null, user: null, studentProfile: null, hydrated: true });
   },
   setHydrated: () => set({ hydrated: true }),
 }));

@@ -10,6 +10,8 @@ const schema = Joi.object({
   MONGO_URI: Joi.string().required(),
   JWT_SECRET: Joi.string().min(16).required(),
   JWT_EXPIRES_IN: Joi.string().default("7d"),
+  JWT_REFRESH_SECRET: Joi.string().allow("").default(""),
+  JWT_REFRESH_EXPIRES_IN: Joi.string().default("30d"),
   CORS_ORIGIN: Joi.string().allow("", "*").default("*"),
   EMAIL_SERVICE: Joi.string().allow("").default("gmail"),
   EMAIL_USER: Joi.string().allow("").default(""),

@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/User");
 const Student = require("../models/Student");
 
@@ -8,10 +9,33 @@ const Student = require("../models/Student");
  * Generates a signed JWT for a given user ID.
  * Expiry is controlled by JWT_EXPIRES_IN env var (default: 7d).
  */
-const generateToken = (userId) => {
+const getRefreshSecret = () => process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+
+const generateAccessToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
+};
+
+const generateRefreshToken = (userId) =>
+  jwt.sign({ id: userId, type: "refresh" }, getRefreshSecret(), {
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
+  });
+
+const hashToken = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
+
+const loadStudentProfile = async (userId) =>
+  Student.findOne({ userId }).select("studentId gender isEBL studentClass isActive createdAt");
+
+const buildAuthResponse = async (user, { accessToken, refreshToken }) => {
+  const studentProfile = user.role === "student" ? await loadStudentProfile(user._id) : null;
+
+  return {
+    token: accessToken,
+    refreshToken,
+    user: buildAuthUserPayload(user, studentProfile),
+    studentProfile,
+  };
 };
 
 const buildAuthUserPayload = (user, studentProfile = null) => ({
@@ -78,23 +102,16 @@ const login = async (req, res) => {
     }
 
     // 4. Generate token
-    const token = generateToken(user._id);
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    user.refreshTokenHash = hashToken(refreshToken);
+    await user.save();
+    const authPayload = await buildAuthResponse(user, { accessToken, refreshToken });
 
     return res.status(200).json({
       success: true,
       message: "Login successful.",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        phoneNumber: user.phoneNumber || "",
-        role: user.role,
-        hostelId: user.hostelId,
-        isFirstLogin: user.isFirstLogin,
-        isActive: user.isActive,
-      },
+      ...authPayload,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -161,6 +178,63 @@ const changePassword = async (req, res) => {
     });
   } catch (error) {
     console.error("Change password error:", error);
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+const refreshSession = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh token is required.",
+      });
+    }
+
+    const decoded = jwt.verify(refreshToken, getRefreshSecret());
+    if (decoded.type !== "refresh") {
+      return res.status(401).json({ success: false, message: "Invalid refresh token." });
+    }
+
+    const user = await User.findById(decoded.id).select("-password +refreshTokenHash");
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found." });
+    }
+
+    if (user.isActive === false) {
+      return res.status(401).json({
+        success: false,
+        message: "This account is inactive. Please contact an administrator.",
+      });
+    }
+
+    if (!user.refreshTokenHash || user.refreshTokenHash !== hashToken(refreshToken)) {
+      return res.status(401).json({ success: false, message: "Refresh token is invalid." });
+    }
+
+    const nextAccessToken = generateAccessToken(user._id);
+    const nextRefreshToken = generateRefreshToken(user._id);
+    user.refreshTokenHash = hashToken(nextRefreshToken);
+    await user.save();
+
+    const authPayload = await buildAuthResponse(user, {
+      accessToken: nextAccessToken,
+      refreshToken: nextRefreshToken,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Session refreshed successfully.",
+      ...authPayload,
+    });
+  } catch (error) {
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ success: false, message: "Refresh token has expired. Please log in again." });
+    }
+
+    console.error("Refresh session error:", error);
     return res.status(500).json({ success: false, message: "Server error." });
   }
 };
@@ -249,4 +323,4 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
-module.exports = { login, changePassword, getCurrentUser, updateProfile };
+module.exports = { login, refreshSession, changePassword, getCurrentUser, updateProfile };

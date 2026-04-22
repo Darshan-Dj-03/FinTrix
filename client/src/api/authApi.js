@@ -5,6 +5,10 @@ export const authApi = {
     const { data } = await apiClient.post("/auth/login", payload);
     return data;
   },
+  refresh: async (payload) => {
+    const { data } = await apiClient.post("/auth/refresh", payload);
+    return data;
+  },
   getMe: async () => {
     const { data } = await apiClient.get("/auth/me");
     return data;
