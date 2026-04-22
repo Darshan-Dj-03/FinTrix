@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -25,6 +25,7 @@ const CREATE_DEFAULTS = {
   studentIdMode: "automatic",
   studentId: "",
   gender: "male",
+  isEBL: "false",
 };
 
 const EDIT_DEFAULTS = {
@@ -36,6 +37,7 @@ const EDIT_DEFAULTS = {
   studentIdMode: "automatic",
   studentId: "",
   gender: "male",
+  isEBL: "false",
 };
 
 const ROLE_OPTIONS = ["student", "caretaker", "warden", "dean"];
@@ -44,6 +46,7 @@ const HOSTEL_BOUND_ROLES = ["student", "caretaker"];
 export function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const editFormRef = useRef(null);
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
     queryFn: adminApi.listUsers,
@@ -96,8 +99,14 @@ export function AdminUsersPage() {
       studentIdMode: selectedUser.studentProfile?.isTemporaryId ? "automatic" : "manual",
       studentId: selectedUser.studentProfile?.studentId || "",
       gender: selectedUser.studentProfile?.gender || "male",
+      isEBL: String(selectedUser.studentProfile?.isEBL ?? false),
     });
   }, [selectedUser, editForm]);
+
+  useEffect(() => {
+    if (!selectedUser || !editFormRef.current) return;
+    editFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedUser]);
 
   const rows = useMemo(() => {
     const items = usersQuery.data?.data || [];
@@ -156,6 +165,7 @@ export function AdminUsersPage() {
         payload.studentId = values.studentId.trim();
       }
       payload.gender = values.gender;
+      payload.isEBL = values.isEBL === "true";
     }
 
     return payload;
@@ -244,6 +254,13 @@ export function AdminUsersPage() {
                     <option value="female">Female</option>
                   </Select>
                 </div>
+                <div>
+                  <label className="field-label">EBL Student</label>
+                  <Select {...createForm.register("isEBL")}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </Select>
+                </div>
               </>
             ) : null}
           </div>
@@ -255,6 +272,7 @@ export function AdminUsersPage() {
         </form>
 
         <form
+          ref={editFormRef}
           className="panel p-6"
           onSubmit={editForm.handleSubmit((values) => {
             if (!selectedUser) return;
@@ -332,6 +350,13 @@ export function AdminUsersPage() {
                     <option value="female">Female</option>
                   </Select>
                 </div>
+                <div>
+                  <label className="field-label">EBL Student</label>
+                  <Select disabled={!selectedUser} {...editForm.register("isEBL")}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </Select>
+                </div>
               </>
             ) : null}
           </div>
@@ -386,6 +411,16 @@ export function AdminUsersPage() {
                 render: (row) =>
                   row.role === "student"
                     ? `${row.studentProfile?.studentId || "-"}${row.studentProfile?.isTemporaryId ? " (temp)" : ""}`
+                    : "-",
+              },
+              {
+                key: "eblMeta",
+                label: "EBL",
+                render: (row) =>
+                  row.role === "student"
+                    ? row.studentProfile?.isEBL
+                      ? "Yes"
+                      : "No"
                     : "-",
               },
               {

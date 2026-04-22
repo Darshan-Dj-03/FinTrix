@@ -16,6 +16,12 @@ const hostelExpenseBillItemSchema = new mongoose.Schema(
       trim: true,
       maxlength: 80,
     },
+    cheque_number: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 80,
+    },
     description: {
       type: String,
       default: "",

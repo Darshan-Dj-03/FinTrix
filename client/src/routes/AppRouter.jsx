@@ -15,6 +15,7 @@ const StudentBillsPage = lazy(() => import("../pages/student/StudentBillsPage").
 const StudentPaymentsPage = lazy(() => import("../pages/student/StudentPaymentsPage").then((module) => ({ default: module.StudentPaymentsPage })));
 const StudentEblPage = lazy(() => import("../pages/student/StudentEblPage").then((module) => ({ default: module.StudentEblPage })));
 const CaretakerOverviewPage = lazy(() => import("../pages/caretaker/CaretakerOverviewPage").then((module) => ({ default: module.CaretakerOverviewPage })));
+const CaretakerEblPage = lazy(() => import("../pages/caretaker/CaretakerEblPage").then((module) => ({ default: module.CaretakerEblPage })));
 const CaretakerExpensesPage = lazy(() => import("../pages/caretaker/CaretakerExpensesPage").then((module) => ({ default: module.CaretakerExpensesPage })));
 const CaretakerHostelExpensePage = lazy(() => import("../pages/caretaker/CaretakerHostelExpensePage").then((module) => ({ default: module.CaretakerHostelExpensePage })));
 const CaretakerAdvancesPage = lazy(() => import("../pages/caretaker/CaretakerAdvancesPage").then((module) => ({ default: module.CaretakerAdvancesPage })));
@@ -93,6 +94,7 @@ export function AppRouter() {
               <Route path="/caretaker" element={<CaretakerOverviewPage />} />
               <Route path="/caretaker/expenses" element={<CaretakerExpensesPage />} />
               <Route path="/caretaker/hostel-expense" element={<CaretakerHostelExpensePage />} />
+              <Route path="/caretaker/ebl" element={<CaretakerEblPage />} />
               <Route path="/caretaker/advances" element={<CaretakerAdvancesPage />} />
               <Route path="/caretaker/guest-charge" element={<CaretakerGuestChargePage />} />
               <Route path="/caretaker/consumption" element={<CaretakerConsumptionPage />} />

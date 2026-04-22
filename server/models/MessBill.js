@@ -64,6 +64,18 @@ const messBillSchema = new mongoose.Schema(
         'month must be in "Mon-YYYY" format (e.g. Jan-2026)',
       ],
     },
+    is_ebl_student: {
+      type: Boolean,
+      default: false,
+    },
+    ebl_category: {
+      type: String,
+      enum: {
+        values: ["", "SC", "ST"],
+        message: 'ebl_category must be "SC" or "ST"',
+      },
+      default: "",
+    },
 
     // ── Charges ────────────────────────────────────────────────────────────────
 
@@ -294,8 +306,8 @@ const messBillSchema = new mongoose.Schema(
     payment_status: {
       type: String,
       enum: {
-        values: ["pending", "partial", "paid"],
-        message: 'payment_status must be "pending", "partial", or "paid"',
+        values: ["pending", "partial", "paid", "ebl"],
+        message: 'payment_status must be "pending", "partial", "paid", or "ebl"',
       },
       default: "pending",
     },

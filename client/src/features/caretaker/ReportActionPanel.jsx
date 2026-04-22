@@ -1,11 +1,10 @@
 import { Button } from "../../components/ui/Button";
 import { Stepper } from "../../components/common/Stepper";
 
-const steps = [
+const defaultSteps = [
   { label: "Draft", value: "draft" },
   { label: "Submitted", value: "submitted" },
   { label: "Warden", value: "warden_approved" },
-  { label: "Dean", value: "dean_approved" },
 ];
 
 export function ReportActionPanel({
@@ -14,6 +13,7 @@ export function ReportActionPanel({
   onSubmit,
   generating,
   submitting,
+  steps = defaultSteps,
 }) {
   return (
     <div className="space-y-6">

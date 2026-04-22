@@ -8,6 +8,9 @@ const Hostel = require("../models/Hostel");
 const {
   notifyReportStakeholders,
   notifyCaretakerApproval,
+  notifyReportGeneratedInApp,
+  notifyReportSubmittedInApp,
+  notifyReportApprovedInApp,
 } = require("../services/notificationService");
 const { runInTransaction } = require("../utils/transaction");
 const { createAuditLog } = require("../services/auditService");
@@ -263,6 +266,13 @@ const generateReport = async (req, res) => {
       triggeredByName: req.user.name,
       triggerLabel: "The main billing report has been generated",
     });
+    await notifyReportGeneratedInApp({
+      month,
+      hostelId,
+      reportName: "Main Billing Report",
+      generatedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(201).json({
       success: true,
@@ -342,6 +352,13 @@ const submitReport = async (req, res) => {
       hostelId,
       triggeredByName: req.user.name,
       triggerLabel: "The main billing report has been submitted",
+    });
+    await notifyReportSubmittedInApp({
+      month,
+      hostelId,
+      reportName: "Main Billing Report",
+      submittedByName: req.user.name,
+      actor: req.user,
     });
 
     return res.status(200).json({
@@ -446,6 +463,14 @@ const wardenApprove = async (req, res) => {
         approverName: req.user.name,
         notes: notes || "",
       }),
+      notifyReportApprovedInApp({
+        month,
+        hostelId,
+        reportName: "Main Billing Report",
+        approverRole: "warden",
+        approverName: req.user.name,
+        actor: req.user,
+      }),
     ]);
 
     return res.status(200).json({
@@ -461,6 +486,11 @@ const wardenApprove = async (req, res) => {
 
 const deanApprove = async (req, res) => {
   try {
+    return res.status(400).json({
+      success: false,
+      message: "Dean approval is not required for the main billing report. Warden approval is the final step for this report.",
+    });
+
     const { month } = req.params;
     const hostelId = resolveHostelId(req, req.body.hostelId);
     const { notes } = req.body;

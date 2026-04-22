@@ -7,7 +7,11 @@ client/dist/
 
 # env files
 .env
+.env.*
 client/.env
+client/.env.*
+server/.env
+server/.env.*
 
 # temp files
 tmp/
@@ -15,3 +19,4 @@ tmp_docx/
 
 # logs
 *.log
+tmp_docx_*

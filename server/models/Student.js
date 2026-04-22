@@ -29,10 +29,22 @@ const studentSchema = new mongoose.Schema(
       required: [true, "Gender is required"],
     },
 
-    // EBL = Electricity Bill Liable; determines billing responsibility
+    // EBL = SC/ST reimbursement workflow eligibility
     isEBL: {
       type: Boolean,
       default: false,
+    },
+    eblCategory: {
+      type: String,
+      enum: ["", "SC", "ST"],
+      default: "",
+      uppercase: true,
+      trim: true,
+    },
+    studentClass: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     // false = on vacation / inactive (not billed for that period)

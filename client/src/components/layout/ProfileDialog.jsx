@@ -5,11 +5,14 @@ import toast from "react-hot-toast";
 import { X } from "lucide-react";
 
 import { authApi } from "../../api/authApi";
+import { useAuthStore } from "../../store/authStore";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { ROLE_LABELS } from "../../utils/constants";
 
 export function ProfileDialog({ open, onClose, user, studentProfile }) {
+  const updateStoredProfile = useAuthStore((state) => state.updateProfile);
+  const canEditPhoneNumber = ["warden", "caretaker"].includes(user?.role);
   const {
     register,
     handleSubmit,
@@ -23,12 +26,27 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
       confirmPassword: "",
     },
   });
+  const {
+    register: registerContact,
+    handleSubmit: handleContactSubmit,
+    reset: resetContact,
+    formState: { errors: contactErrors },
+  } = useForm({
+    defaultValues: {
+      phoneNumber: user?.phoneNumber || "",
+    },
+  });
 
   useEffect(() => {
     if (!open) {
       reset();
+      resetContact({ phoneNumber: user?.phoneNumber || "" });
     }
-  }, [open, reset]);
+  }, [open, reset, resetContact, user?.phoneNumber]);
+
+  useEffect(() => {
+    resetContact({ phoneNumber: user?.phoneNumber || "" });
+  }, [resetContact, user?.phoneNumber]);
 
   const changePasswordMutation = useMutation({
     mutationFn: authApi.changePassword,
@@ -39,6 +57,20 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
     },
     onError: (error) => {
       toast.error(error?.response?.data?.message || "Unable to change password.");
+    },
+  });
+  const updateProfileMutation = useMutation({
+    mutationFn: authApi.updateProfile,
+    onSuccess: (response) => {
+      updateStoredProfile({
+        user: response.data.user,
+        studentProfile: response.data.studentProfile,
+      });
+      resetContact({ phoneNumber: response.data.user?.phoneNumber || "" });
+      toast.success("Profile details updated successfully.");
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Unable to update profile details.");
     },
   });
 
@@ -56,6 +88,9 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
 
   const onSubmit = handleSubmit(({ currentPassword, newPassword }) => {
     changePasswordMutation.mutate({ currentPassword, newPassword });
+  });
+  const onContactSubmit = handleContactSubmit(({ phoneNumber }) => {
+    updateProfileMutation.mutate({ phoneNumber });
   });
 
   return (
@@ -110,6 +145,34 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
                 </div>
               ) : null}
             </dl>
+
+            {canEditPhoneNumber ? (
+              <form onSubmit={onContactSubmit} className="mt-6 border-t border-slate-200 pt-5">
+                <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Contact number</h4>
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-slate-700">Phone number</label>
+                  <Input
+                    type="text"
+                    className="mt-2"
+                    placeholder="Enter phone number"
+                    {...registerContact("phoneNumber", {
+                      maxLength: {
+                        value: 25,
+                        message: "Phone number must be 25 characters or less",
+                      },
+                    })}
+                  />
+                  {contactErrors.phoneNumber ? (
+                    <p className="mt-2 text-xs font-medium text-rose-500">{contactErrors.phoneNumber.message}</p>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button type="submit" size="sm" variant="secondary" loading={updateProfileMutation.isPending}>
+                    Save number
+                  </Button>
+                </div>
+              </form>
+            ) : null}
           </div>
 
           <form onSubmit={onSubmit} className="rounded-3xl border border-slate-200 p-5">

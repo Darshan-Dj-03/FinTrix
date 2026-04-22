@@ -8,6 +8,7 @@ const roundCurrency = (value = 0) => Number(toNumber(value).toFixed(2));
 export const blankHostelExpenseBill = () => ({
   store_name: "",
   bill_number: "",
+  cheque_number: "",
   description: "",
   bill_amount: "",
 });
@@ -47,6 +48,7 @@ export const normalizeBillBreakdownsForForm = (record = {}) =>
       acc[key] = matchingBreakdown.items.map((item) => ({
         store_name: item.store_name || "",
         bill_number: item.bill_number || "",
+        cheque_number: item.cheque_number || "",
         description: item.description || "",
         bill_amount: item.bill_amount ?? "",
       }));
@@ -58,6 +60,7 @@ export const normalizeBillBreakdownsForForm = (record = {}) =>
         {
           store_name: "Legacy Entry",
           bill_number: "-",
+          cheque_number: "",
           description: "Imported existing total",
           bill_amount: record[key],
         },
@@ -78,6 +81,7 @@ export const serializeBillBreakdownsForPayload = (billBreakdowns = {}) =>
             .map((item) => ({
               store_name: String(item?.store_name || "").trim(),
               bill_number: String(item?.bill_number || "").trim(),
+              cheque_number: String(item?.cheque_number || "").trim(),
               description: String(item?.description || "").trim(),
               bill_amount: toNumber(item?.bill_amount),
             }))
@@ -85,6 +89,7 @@ export const serializeBillBreakdownsForPayload = (billBreakdowns = {}) =>
               (item) =>
                 item.store_name ||
                 item.bill_number ||
+                item.cheque_number ||
                 item.description ||
                 item.bill_amount > 0
             )

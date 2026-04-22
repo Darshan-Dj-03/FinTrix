@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 
 import { authApi } from "../../api/authApi";
 import { billApi } from "../../api/billApi";
+import { eblApi } from "../../api/eblApi";
 import { paymentApi } from "../../api/paymentApi";
 import { LoadingState } from "../../components/common/LoadingState";
 import { ErrorState } from "../../components/common/ErrorState";
@@ -14,8 +15,22 @@ import { StatCard } from "../../components/common/StatCard";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { useAuthStore } from "../../store/authStore";
 import { useBillDownload } from "../../hooks/useBillDownload";
-import { CURRENT_MONTH } from "../../utils/constants";
+import { CURRENT_MONTH, parseMonthValue } from "../../utils/constants";
 import { formatCurrency, formatDate } from "../../utils/formatters";
+
+const getSortableMonthValue = (month) => {
+  const { monthIndex, year } = parseMonthValue(month);
+  return year * 12 + monthIndex;
+};
+
+const isMonthInsidePeriod = (month, fromMonth, toMonth) => {
+  const currentValue = getSortableMonthValue(month);
+  const fromValue = getSortableMonthValue(fromMonth);
+  const toValue = getSortableMonthValue(toMonth);
+  const lowerBound = Math.min(fromValue, toValue);
+  const upperBound = Math.max(fromValue, toValue);
+  return currentValue >= lowerBound && currentValue <= upperBound;
+};
 
 export function StudentOverviewPage() {
   const studentProfile = useAuthStore((state) => state.studentProfile);
@@ -42,58 +57,66 @@ export function StudentOverviewPage() {
     enabled: Boolean(studentProfile?._id),
   });
   const paymentsQuery = useQuery({
-    queryKey: ["student-payment-overview"],
-    queryFn: () => paymentApi.list(),
+    queryKey: ["student-payment-overview", month],
+    queryFn: () => paymentApi.list({ month }),
   });
+  const eblStatusQuery = useQuery({
+    queryKey: ["student-ebl-overview"],
+    queryFn: eblApi.getStudentStatus,
+    enabled: Boolean(studentProfile?._id && studentProfile?.isEBL),
+  });
+
+  const matchingEblPeriod = (eblStatusQuery.data?.data?.periods || []).find((period) =>
+    isMonthInsidePeriod(month, period.fromMonth, period.toMonth)
+  );
+  const bill = billQuery.data?.data;
+  const isEblMonth = Boolean(
+    bill?.is_ebl_student ||
+      matchingEblPeriod ||
+      (studentProfile?.isEBL &&
+        (bill?.student_utr_number || Number(bill?.amount_paid || 0) > 0 || bill?.payment_status === "paid"))
+  );
 
   const totals = useMemo(() => {
     const payments = paymentsQuery.data?.data || [];
-    const isApproved = Boolean(user?.eblApproved && (studentProfile?.isEBL ?? user?.isEBL));
+    if (isEblMonth && Number(bill?.amount_paid || 0) > 0) {
+      return {
+        count: 1,
+        collected: Number(bill.amount_paid || 0),
+      };
+    }
 
     return {
       count: payments.length,
       collected: payments.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      eblStatus: isApproved
-        ? "approved"
-        : user?.eblRequestPending
-          ? "submitted"
-          : user?.eblRejected
-            ? "rejected"
-            : "pending",
     };
-  }, [
-    paymentsQuery.data?.data,
-    studentProfile?.isEBL,
-    user?.eblApproved,
-    user?.eblRejected,
-    user?.eblRequestPending,
-    user?.isEBL,
-  ]);
+  }, [bill?.amount_paid, isEblMonth, paymentsQuery.data?.data]);
 
-  if (billQuery.isLoading || paymentsQuery.isLoading) {
+  if (billQuery.isLoading || paymentsQuery.isLoading || eblStatusQuery.isLoading) {
     return <LoadingState label="Loading your student overview..." />;
   }
 
-  if (billQuery.isError || paymentsQuery.isError) {
+  if (billQuery.isError || paymentsQuery.isError || eblStatusQuery.isError) {
     return (
       <ErrorState
         description="Could not load your billing overview."
         onRetry={() => {
           billQuery.refetch();
           paymentsQuery.refetch();
+          eblStatusQuery.refetch();
         }}
       />
     );
   }
 
-  const bill = billQuery.data?.data;
+  const currentPayable = isEblMonth ? 0 : Math.max(0, Number(bill?.total_amount || 0) + Number(bill?.fine || 0) - Number(bill?.amount_paid || 0));
+  const currentFine = isEblMonth ? 0 : bill?.fine || 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Student workspace"
         title={`Hello, ${user?.name?.split(" ")[0] || "Student"}`}
-        // description="Track your latest bill, see how much you have already paid, and stay on top of EBL status."
         action={
           <div className="w-full max-w-sm">
             <MonthPicker label="Bill month" value={month} onChange={setMonth} />
@@ -102,14 +125,14 @@ export function StudentOverviewPage() {
       />
 
       <div className="grid gap-5 md:grid-cols-3">
-        <StatCard label="Current payable" value={(bill?.total_amount || 0) + (bill?.fine || 0)} icon={Receipt} />
-        <StatCard label="Current fine" value={bill?.fine || 0} tone="mint" icon={CreditCard} />
+        <StatCard label="Current payable" value={currentPayable} icon={Receipt} />
+        <StatCard label="Current fine" value={currentFine} tone="mint" icon={CreditCard} />
         <div className="panel p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">EBL status</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">EBL applicability</p>
               <div className="mt-4">
-                <StatusBadge value={totals.eblStatus} />
+                <StatusBadge value={studentProfile?.isEBL ? "available" : "not_applicable"} />
               </div>
             </div>
             <div className="rounded-2xl bg-orange-100 p-3 text-orange-600">
@@ -149,7 +172,9 @@ export function StudentOverviewPage() {
                 <p className="mt-3 font-display text-4xl font-bold">{formatCurrency(bill.amount_paid || 0)}</p>
               </div>
               <p className="text-sm text-slate-500">
-                Late fine is updated daily after the due date: Rs.2 per day for the first 30 days, then Rs.5 per day.
+                {isEblMonth
+                  ? "This month is settled through the EBL workflow. Students do not handle late fine or direct bill payment here."
+                  : "Late fine is updated daily after the due date: Rs.2 per day for the first 30 days, then Rs.5 per day."}
               </p>
             </div>
           ) : (

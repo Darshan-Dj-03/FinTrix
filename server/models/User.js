@@ -27,6 +27,12 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 25,
+    },
 
     password: {
       type: String,
@@ -59,20 +65,6 @@ const userSchema = new mongoose.Schema(
     },
 
     isEBL: {
-      type: Boolean,
-      default: false,
-    },
-
-    eblApproved: {
-      type: Boolean,
-      default: false,
-    },
-
-    eblRequestPending: {
-      type: Boolean,
-      default: false,
-    },
-    eblRejected: {
       type: Boolean,
       default: false,
     },

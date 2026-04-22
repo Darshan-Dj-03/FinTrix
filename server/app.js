@@ -22,12 +22,39 @@ const advanceRoutes = require("./routes/advanceRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const sanitizeRequest = require("./middleware/sanitizeMiddleware");
 const requestLogger = require("./middleware/requestLogger");
 const { globalErrorHandler } = require("./middleware/validationMiddleware");
 const registerSwagger = require("./docs/swagger");
 
 const app = express();
+const configuredCorsOrigin = String(process.env.CORS_ORIGIN || "*").trim();
+const allowedOrigins =
+  configuredCorsOrigin === "*" || !configuredCorsOrigin
+    ? ["*"]
+    : configuredCorsOrigin
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+
+const corsOptions = {
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+};
+
+if (allowedOrigins.includes("*")) {
+  corsOptions.origin = "*";
+} else {
+  corsOptions.origin = (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("CORS origin not allowed."));
+  };
+}
 
 app.use(
   helmet({
@@ -37,13 +64,7 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
-  })
-);
+app.use(cors(corsOptions));
 app.use(sanitizeRequest);
 app.use(requestLogger);
 
@@ -83,6 +104,7 @@ app.use("/advances", advanceRoutes);
 app.use("/ledger", ledgerRoutes);
 app.use("/payment", paymentRoutes);
 app.use("/analytics", analyticsRoutes);
+app.use("/notifications", notificationRoutes);
 
 if (process.env.SWAGGER_ENABLED !== "false") {
   registerSwagger(app);

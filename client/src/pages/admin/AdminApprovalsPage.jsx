@@ -9,7 +9,6 @@ import { hostelApi } from "../../api/hostelApi";
 import { hostelExpenseApi } from "../../api/hostelExpenseApi";
 import { monthlyExpenseReportApi } from "../../api/monthlyExpenseReportApi";
 import { reportApi } from "../../api/reportApi";
-import { studentApi } from "../../api/studentApi";
 import { DataTable } from "../../components/common/DataTable";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingState } from "../../components/common/LoadingState";
@@ -38,6 +37,8 @@ const normalizeRecord = (record, reportName, reportType) => {
 
 export function AdminApprovalsPage() {
   const user = useAuthStore((state) => state.user);
+  const isWarden = user?.role === "warden";
+  const isDeanStageUser = user?.role === "dean" || user?.role === "admin";
   const downloadHostelExpense = useHostelExpenseDownload();
   const downloadMonthlyExpenseReport = useMonthlyExpenseReportDownload();
   const downloadExpense = useExpenseDownload();
@@ -99,37 +100,39 @@ export function AdminApprovalsPage() {
     enabled: Boolean(month && effectiveHostelId),
     retry: false,
   });
-
-  const studentsQuery = useQuery({
-    queryKey: ["approval-students"],
-    queryFn: studentApi.list,
-    enabled: user?.role === "admin",
+  const eblReportsQuery = useQuery({
+    queryKey: ["approval-ebl-reports", effectiveHostelId],
+    queryFn: () => eblApi.listReports({ hostelId: effectiveHostelId, status: "submitted" }),
+    enabled: Boolean(effectiveHostelId && isWarden),
   });
 
   const approvalMutation = useMutation({
     mutationFn: async ({ reportType, notes }) => {
       const payload = { hostelId: effectiveHostelId, notes };
+      if (isDeanStageUser && reportType !== "monthly_expense_report") {
+        throw new Error("Dean approval is only required for the Total Monthly Expenditure Report.");
+      }
       if (reportType === "main_report") {
-        return user?.role === "warden"
+        return isWarden
           ? reportApi.approveByWarden(month, payload)
           : reportApi.approveByDean(month, payload);
       }
       if (reportType === "expense_snapshot") {
-        return user?.role === "warden"
+        return isWarden
           ? expenseApi.approveByWarden(month, payload)
           : expenseApi.approveByDean(month, payload);
       }
       if (reportType === "monthly_expense_report") {
-        return user?.role === "warden"
+        return isWarden
           ? monthlyExpenseReportApi.approveByWarden(month, payload)
           : monthlyExpenseReportApi.approveByDean(month, payload);
       }
       if (reportType === "mess_bill_per_student") {
-        return user?.role === "warden"
+        return isWarden
           ? billApi.approveMessBillReportByWarden(month, payload)
           : billApi.approveMessBillReportByDean(month, payload);
       }
-      return user?.role === "warden"
+      return isWarden
         ? hostelExpenseApi.approveByWarden(month, payload)
         : hostelExpenseApi.approveByDean(month, payload);
     },
@@ -141,16 +144,16 @@ export function AdminApprovalsPage() {
       expenseSnapshotQuery.refetch();
       messBillReportQuery.refetch();
     },
-    onError: (error) => toast.error(error?.response?.data?.message || "Unable to approve report."),
+    onError: (error) => toast.error(error?.response?.data?.message || error?.message || "Unable to approve report."),
   });
 
   const eblMutation = useMutation({
-    mutationFn: ({ id, approve }) => eblApi.approve(id, { approve }),
+    mutationFn: ({ id }) => eblApi.approveReport(id),
     onSuccess: () => {
-      toast.success("EBL status updated.");
-      studentsQuery.refetch();
+      toast.success("EBL report approved.");
+      eblReportsQuery.refetch();
     },
-    onError: (error) => toast.error(error?.response?.data?.message || "Unable to update EBL."),
+    onError: (error) => toast.error(error?.response?.data?.message || "Unable to approve EBL claim."),
   });
 
   const approvalRows = useMemo(() => {
@@ -211,20 +214,30 @@ export function AdminApprovalsPage() {
       );
     }
 
-    return rows.filter(Boolean);
-  }, [expenseSnapshotQuery.data?.expenses, hostelExpenseDetailsQuery.data?.data, mainReportQuery.data?.data, messBillReportQuery.data?.data, monthlyExpenseReportQuery.data?.data]);
-
-  const pendingStudents = (studentsQuery.data?.students || []).filter((student) => student.userId?.eblRequestPending);
-
+    const normalizedRows = rows.filter(Boolean);
+    return isDeanStageUser
+      ? normalizedRows.filter((row) => row.report_type === "monthly_expense_report")
+      : normalizedRows;
+  }, [expenseSnapshotQuery.data?.expenses, hostelExpenseDetailsQuery.data?.data, isDeanStageUser, mainReportQuery.data?.data, messBillReportQuery.data?.data, monthlyExpenseReportQuery.data?.data]);
   const isLoading =
     (needsHostelSelection && hostelsQuery.isLoading) ||
-    (Boolean(effectiveHostelId) && (mainReportQuery.isLoading || monthlyExpenseReportQuery.isLoading || hostelExpenseDetailsQuery.isLoading || expenseSnapshotQuery.isLoading || messBillReportQuery.isLoading)) ||
-    (user?.role === "admin" && studentsQuery.isLoading);
+    (Boolean(effectiveHostelId) &&
+      (mainReportQuery.isLoading ||
+        monthlyExpenseReportQuery.isLoading ||
+        hostelExpenseDetailsQuery.isLoading ||
+        expenseSnapshotQuery.isLoading ||
+        messBillReportQuery.isLoading ||
+        eblReportsQuery.isLoading));
 
   const hasError =
     (needsHostelSelection && hostelsQuery.isError) ||
-    (Boolean(effectiveHostelId) && (mainReportQuery.isError || monthlyExpenseReportQuery.isError || hostelExpenseDetailsQuery.isError || expenseSnapshotQuery.isError || messBillReportQuery.isError)) ||
-    (user?.role === "admin" && studentsQuery.isError);
+    (Boolean(effectiveHostelId) &&
+      (mainReportQuery.isError ||
+        monthlyExpenseReportQuery.isError ||
+        hostelExpenseDetailsQuery.isError ||
+        expenseSnapshotQuery.isError ||
+        messBillReportQuery.isError ||
+        eblReportsQuery.isError));
 
   if (isLoading) {
     return <LoadingState label="Loading approvals..." />;
@@ -241,7 +254,7 @@ export function AdminApprovalsPage() {
           hostelExpenseDetailsQuery.refetch();
           expenseSnapshotQuery.refetch();
           messBillReportQuery.refetch();
-          if (user?.role === "admin") studentsQuery.refetch();
+          if (isWarden) eblReportsQuery.refetch();
         }}
       />
     );
@@ -251,8 +264,12 @@ export function AdminApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Approvals"
-        title={user?.role === "warden" ? "Warden approval panel" : "Dean/admin approval panel"}
-        description="Review submitted reports for the selected hostel and month, then approve them in sequence."
+        title={isWarden ? "Warden approval panel" : "Dean/admin approval panel"}
+        description={
+          isWarden
+            ? "Review submitted reports for the selected hostel and month, then approve them."
+            : "Dean/admin approval is only required for the Total Monthly Expenditure Report."
+        }
         action={
           <div className="grid gap-3 md:grid-cols-2">
             <div>
@@ -354,8 +371,10 @@ export function AdminApprovalsPage() {
               label: "Action",
               render: (row) => {
                 const canApprove =
-                  (user?.role === "warden" && row.status === "submitted") ||
-                  ((user?.role === "dean" || user?.role === "admin") && row.status === "warden_approved");
+                  (isWarden && row.status === "submitted") ||
+                  (isDeanStageUser &&
+                    row.report_type === "monthly_expense_report" &&
+                    row.status === "warden_approved");
 
                 return (
                   <Button
@@ -364,7 +383,7 @@ export function AdminApprovalsPage() {
                     disabled={!canApprove || approvalMutation.isPending}
                     onClick={() => approvalMutation.mutate({ reportType: row.report_type, notes: "" })}
                   >
-                    {user?.role === "warden" ? "Approve as warden" : "Approve as dean"}
+                    {isWarden ? "Approve as warden" : "Approve as dean"}
                   </Button>
                 );
               },
@@ -374,44 +393,73 @@ export function AdminApprovalsPage() {
         />
       ) : null}
 
-      <div className="panel p-6">
-        <h2 className="section-title">Pending EBL requests</h2>
-        {user?.role !== "admin" ? (
-          <p className="mt-4 text-sm text-slate-500">Only admin users can approve or reject EBL requests.</p>
-        ) : (
+      {isWarden ? (
+        <div className="panel p-6">
+          <h2 className="section-title">Submitted EBL reports</h2>
           <div className="mt-5">
             <DataTable
-              rows={pendingStudents}
+              rows={eblReportsQuery.data?.data || []}
               columns={[
-                { key: "studentId", label: "Student ID" },
-                { key: "name", label: "Name", render: (row) => row.userId?.name || "-" },
-                { key: "hostel", label: "Hostel", render: (row) => row.userId?.hostelId?.name || "-" },
-                { key: "state", label: "Status", render: () => <StatusBadge value="submitted" /> },
                 {
-                  key: "actions",
-                  label: "Actions",
+                  key: "report",
+                  label: "Report Name",
+                  render: (row) =>
+                    row.reportType === "pre_receipt"
+                      ? "EBL Pre-Receipt Report"
+                      : "EBL Month-wise Calculation Report",
+                },
+                { key: "period", label: "Period", render: (row) => `${row.fromMonth} to ${row.toMonth}` },
+                { key: "students", label: "Students Covered", render: (row) => row.totalStudents || 0 },
+                { key: "messBill", label: "Mess Bill Total", render: (row) => `Rs. ${Number(row.totalMessBill || 0).toFixed(2)}` },
+                {
+                  key: "differenceTotal",
+                  label: "Difference Total",
+                  render: (row) => `Rs. ${Number(row.totalDifference || 0).toFixed(2)}`,
+                },
+                { key: "status", label: "Status", render: (row) => <StatusBadge value={row.status} /> },
+                {
+                  key: "download",
+                  label: "Report PDF",
                   render: (row) => (
-                    <div className="flex gap-2">
-                      <button
-                        className="rounded-xl bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700"
-                        onClick={() => eblMutation.mutate({ id: row._id, approve: true })}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-700"
-                        onClick={() => eblMutation.mutate({ id: row._id, approve: false })}
-                      >
-                        Reject
-                      </button>
-                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        eblApi.downloadReportPdf(row._id).then((blob) => {
+                          const url = window.URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = `${row.reportType}-${row.fromMonth}-to-${row.toMonth}.pdf`;
+                          link.click();
+                          window.URL.revokeObjectURL(url);
+                        })
+                      }
+                    >
+                      Download PDF
+                    </Button>
+                  ),
+                },
+                {
+                  key: "action",
+                  label: "Action",
+                  render: (row) => (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={eblMutation.isPending}
+                      onClick={() => eblMutation.mutate({ id: row._id })}
+                    >
+                      Approve claim
+                    </Button>
                   ),
                 },
               ]}
+              emptyMessage="No submitted EBL reports are waiting for warden approval."
             />
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

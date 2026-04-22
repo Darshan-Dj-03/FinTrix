@@ -9,19 +9,68 @@ const {
 const {
   notifyReportStakeholders,
   notifyCaretakerApproval,
+  notifyReportGeneratedInApp,
+  notifyReportSubmittedInApp,
+  notifyReportApprovedInApp,
 } = require("../services/notificationService");
 const logger = require("../utils/logger");
 const {
   createPdfDocument,
   drawUniversityHeader,
+  drawContactDetailsBlock,
   drawSectionHeading,
   drawTable,
   drawSummaryPanel,
   drawSignatureBlock,
+  ensureSpace,
   formatCurrency,
 } = require("../utils/pdfLayout");
+const { resolveReportContacts } = require("../utils/reportContacts");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
+
+const drawDeanSubmissionBlock = (doc, { month, redrawHeader }) => {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  ensureSpace(doc, 170, redrawHeader);
+
+  const lines = [
+    "To,",
+    "    Dean Students Welfare,",
+    "    University of Horticultural Sciences,",
+    "    Bagalkot",
+    "",
+    "[Through Proper Channel]",
+    "",
+    "Sir,",
+    "",
+    `Sub: Submission of Total Monthly Expenditure Report for ${month} ...reg.`,
+    "",
+    `With reference to the above subject, I am herewith submitting the total monthly expenditure report for ${month} for your kind information and needful.`,
+  ];
+
+  lines.forEach((line) => {
+    if (!line) {
+      doc.moveDown(0.22);
+      return;
+    }
+
+    if (line === "[Through Proper Channel]") {
+      doc.font("Times-Bold").fontSize(12).fillColor("#111827").text(line, left, doc.y, {
+        width,
+        align: "center",
+      });
+      return;
+    }
+
+    doc.font("Times-Roman").fontSize(12).fillColor("#111827").text(line, left, doc.y, {
+      width,
+      align: line.startsWith("Sub:") ? "center" : "left",
+    });
+  });
+
+  doc.moveDown(0.4);
+};
 
 const populateConfig = [
   { path: "hostelId", select: "name type location" },
@@ -159,6 +208,13 @@ const generateMonthlyExpenseReport = async (req, res) => {
         ? "The monthly expenditure report has been updated"
         : "The monthly expenditure report has been generated",
     });
+    await notifyReportGeneratedInApp({
+      month,
+      hostelId,
+      reportName: "Monthly Expenditure Report",
+      generatedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(existing ? 200 : 201).json({
       success: true,
@@ -280,6 +336,13 @@ const submitMonthlyExpenseReport = async (req, res) => {
       triggeredByName: req.user.name,
       triggerLabel: "The monthly expenditure report has been submitted",
     });
+    await notifyReportSubmittedInApp({
+      month,
+      hostelId,
+      reportName: "Monthly Expenditure Report",
+      submittedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(200).json({
       success: true,
@@ -338,6 +401,14 @@ const approveMonthlyExpenseReportByWarden = async (req, res) => {
         approverRole: "Warden",
         approverName: req.user.name,
         notes: notes || "",
+      }),
+      notifyReportApprovedInApp({
+        month,
+        hostelId,
+        reportName: "Monthly Expenditure Report",
+        approverRole: "warden",
+        approverName: req.user.name,
+        actor: req.user,
       }),
     ]);
 
@@ -399,6 +470,14 @@ const approveMonthlyExpenseReportByDean = async (req, res) => {
         approverName: req.user.name,
         notes: notes || "",
       }),
+      notifyReportApprovedInApp({
+        month,
+        hostelId,
+        reportName: "Monthly Expenditure Report",
+        approverRole: "dean",
+        approverName: req.user.name,
+        actor: req.user,
+      }),
     ]);
 
     return res.status(200).json({
@@ -433,6 +512,10 @@ const downloadReportPdf = async (req, res) => {
     }
 
     const source = await buildReportSource(hostelId, month);
+    const contacts = await resolveReportContacts({
+      hostelId: report.hostelId?._id || report.hostelId,
+      caretakerUserId: report.generatedBy?._id || report.generatedBy,
+    });
     const doc = createPdfDocument(res, `monthly-expenditure-report-${report.month}.pdf`);
 
     const renderHeader = () =>
@@ -446,6 +529,11 @@ const downloadReportPdf = async (req, res) => {
       });
 
     renderHeader();
+    drawContactDetailsBlock(doc, contacts);
+
+    drawDeanSubmissionBlock(doc, {
+      month: report.month,
+    });
 
     drawSummaryPanel(doc, {
       title: "Report Summary",
@@ -456,10 +544,9 @@ const downloadReportPdf = async (req, res) => {
         { label: "Total Expenditure", value: formatCurrency(report.total_expenditure) },
         { label: "Mess Bill Per Day", value: formatCurrency(report.mess_bill_per_day) },
       ],
-      redrawHeader: renderHeader,
     });
 
-    drawSectionHeading(doc, "Main Service Cost (MSC) Breakdown", renderHeader);
+    drawSectionHeading(doc, "Main Service Cost (MSC) Breakdown");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -472,11 +559,10 @@ const downloadReportPdf = async (req, res) => {
         })),
         { particular: "MSC Total", amount: formatCurrency(report.msc_total) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Monthly Financial Flow", renderHeader);
+    drawSectionHeading(doc, "Monthly Financial Flow");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -490,12 +576,11 @@ const downloadReportPdf = async (req, res) => {
         { particular: "Guest Charges", amount: formatCurrency(report.guest_charges) },
         { particular: "Total Expenditure", amount: formatCurrency(report.total_expenditure) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
     if (source.guest_charge_breakdown.length) {
-      drawSectionHeading(doc, "Guest Charge Register", renderHeader);
+      drawSectionHeading(doc, "Guest Charge Register");
       drawTable(doc, {
         columns: [
           { label: "Event", width: 180, key: "event" },
@@ -509,12 +594,11 @@ const downloadReportPdf = async (req, res) => {
           guests: String(charge.guest_count || 0),
           amount: formatCurrency(charge.amount),
         })),
-        redrawHeader: renderHeader,
         fontSize: 9.5,
       });
     }
 
-    drawSectionHeading(doc, "Other Miscellaneous Expenditure", renderHeader);
+    drawSectionHeading(doc, "Other Miscellaneous Expenditure");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -527,11 +611,10 @@ const downloadReportPdf = async (req, res) => {
         })),
         { particular: "Other Misc Total", amount: formatCurrency(report.other_misc) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Operational & Student Summary", renderHeader);
+    drawSectionHeading(doc, "Operational & Student Summary");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -547,14 +630,16 @@ const downloadReportPdf = async (req, res) => {
         { particular: "Total Days", value: String(report.total_days || 0) },
         { particular: "Mess Bill Per Day", value: formatCurrency(report.mess_bill_per_day) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
     drawSignatureBlock(doc, {
-      leftLabel: "Prepared By Hostel Office",
-      rightLabel: "Verified By Chief Warden / Dean",
-      redrawHeader: renderHeader,
+      signatures: [
+        { label: "Caretaker" },
+        { label: "Warden" },
+        { label: "Dean and Chairman, Hostel Supervisory Committee" },
+      ],
+      footerDate: report.updatedAt || report.createdAt,
     });
 
     doc.end();

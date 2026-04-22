@@ -3,7 +3,10 @@ const Payment = require("../models/Payment");
 const MessBill = require("../models/MessBill");
 const Student = require("../models/Student");
 const Ledger = require("../models/Ledger");
-const { notifyStudentPaymentRecorded } = require("../services/notificationService");
+const {
+  notifyStudentPaymentRecorded,
+  notifyStudentPaymentRecordedInApp,
+} = require("../services/notificationService");
 const { DEFAULT_UTR_MESSAGE, applyLiveBillState } = require("../services/billLifecycleService");
 const { runInTransaction } = require("../utils/transaction");
 const { createAuditLog } = require("../services/auditService");
@@ -74,6 +77,12 @@ const recordPayment = async (req, res) => {
     }
 
     const bill = access.bill;
+    if (bill.is_ebl_student || bill.payment_status === "ebl") {
+      return res.status(400).json({
+        success: false,
+        message: "EBL reimbursement bills cannot be recorded in the regular payment section.",
+      });
+    }
     const billPaymentKey = buildBillPaymentKey(bill._id);
     const payableTotal = Number(applyLiveBillState(bill).total_payable || 0);
     const outstandingBefore = Math.max(payableTotal - Number(bill.amount_paid || 0), 0);
@@ -235,10 +244,16 @@ const recordPayment = async (req, res) => {
           ]);
 
         if (updatedBill) {
-          await notifyStudentPaymentRecorded({
-            bill: updatedBill,
-            payment: result.payment,
-          });
+          await Promise.all([
+            notifyStudentPaymentRecorded({
+              bill: updatedBill,
+              payment: result.payment,
+            }),
+            notifyStudentPaymentRecordedInApp({
+              bill: updatedBill,
+              payment: result.payment,
+            }),
+          ]);
         }
       } catch (emailError) {
         logger.warn("Payment confirmation email failed", {

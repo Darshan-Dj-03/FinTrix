@@ -74,12 +74,12 @@ const calculateDueDate = (month) => {
  *
  * @param {Date} dueDate – date bill was due
  * @param {Date} currentDate – today's date (or reference date)
- * @param {boolean} isEBL – whether student is EBL (Electricity Bill Liable)
+ * @param {boolean} isEBL – whether student is an EBL reimbursement student
  * @param {boolean} eblExemptFine – if true, EBL students get fine = 0 (default: true)
  * @returns {number} – fine amount
  */
 const calculateFine = (dueDate, currentDate = new Date(), isEBL = false, eblExemptFine = true) => {
-  // EBL students exempt from fine (configurable)
+  // EBL students are exempt from fine
   if (isEBL && eblExemptFine) {
     return 0;
   }
@@ -252,7 +252,8 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
     // Due date and fine
     const resolvedDueDate = dueDate ? new Date(dueDate) : calculateDueDate(expense.month);
     const manualFine = roundUpCurrency(consumption.fine_amount);
-    const fine = student.isEBL && eblExemptFine ? 0 : manualFine;
+    const isEblStudent = Boolean(student.isEBL);
+    const fine = isEblStudent && eblExemptFine ? 0 : manualFine;
 
     // Construct bill payload
     return {
@@ -260,6 +261,8 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       userId: student.userId._id,
       hostelId: expense.hostelId,
       month: expense.month,
+      is_ebl_student: isEblStudent,
+      ebl_category: student.eblCategory || "",
 
       // Charges
       base_mess: baseMessCharge,
@@ -291,7 +294,7 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       student_payment_mode: "",
       student_payment_made_date: null,
       student_utr_number: "",
-      payment_status: "pending",
+      payment_status: isEblStudent ? "ebl" : "pending",
       amount_paid: 0,
     };
   });

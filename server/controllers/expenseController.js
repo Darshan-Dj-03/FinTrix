@@ -11,14 +11,21 @@ const Student = require("../models/Student");
 const StudentConsumption = require("../models/StudentConsumption");
 const logger = require("../utils/logger");
 const {
+  notifyReportGeneratedInApp,
+  notifyReportSubmittedInApp,
+  notifyReportApprovedInApp,
+} = require("../services/notificationService");
+const {
   createPdfDocument,
   drawUniversityHeader,
+  drawContactDetailsBlock,
   drawSectionHeading,
   drawTable,
   drawSummaryPanel,
   drawSignatureBlock,
   formatCurrency,
 } = require("../utils/pdfLayout");
+const { resolveReportContacts } = require("../utils/reportContacts");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -262,6 +269,13 @@ const createExpense = async (req, res) => {
     });
 
     const populated = await expense.populate(EXPENSE_POPULATE);
+    await notifyReportGeneratedInApp({
+      month,
+      hostelId,
+      reportName: "Expense Snapshot Report",
+      generatedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(201).json({
       success: true,
@@ -438,6 +452,13 @@ const submitExpense = async (req, res) => {
     await expense.save();
 
     const populated = await Expense.findById(expense._id).populate(EXPENSE_POPULATE);
+    await notifyReportSubmittedInApp({
+      month,
+      hostelId,
+      reportName: "Expense Snapshot Report",
+      submittedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(200).json({
       success: true,
@@ -479,6 +500,14 @@ const approveExpenseByWarden = async (req, res) => {
     await expense.save();
 
     const populated = await Expense.findById(expense._id).populate(EXPENSE_POPULATE);
+    await notifyReportApprovedInApp({
+      month,
+      hostelId,
+      reportName: "Expense Snapshot Report",
+      approverRole: "warden",
+      approverName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(200).json({
       success: true,
@@ -493,6 +522,11 @@ const approveExpenseByWarden = async (req, res) => {
 
 const approveExpenseByDean = async (req, res) => {
   try {
+    return res.status(400).json({
+      success: false,
+      message: "Dean approval is not required for the expense snapshot report. Warden approval is the final step for this report.",
+    });
+
     const { month } = req.params;
     const hostelId = resolveApprovalHostelId(req);
     const { notes } = req.body;
@@ -547,6 +581,10 @@ const downloadExpensePdf = async (req, res) => {
     }
 
     const source = await buildExpenseSource({ hostelId, month });
+    const contacts = await resolveReportContacts({
+      hostelId: expense.hostelId?._id || expense.hostelId,
+      caretakerUserId: expense.createdBy?._id || expense.createdBy,
+    });
     const doc = createPdfDocument(res, `expense-snapshot-${expense.month}.pdf`);
 
     const renderHeader = () =>
@@ -560,6 +598,7 @@ const downloadExpensePdf = async (req, res) => {
       });
 
     renderHeader();
+    drawContactDetailsBlock(doc, contacts);
 
     drawSummaryPanel(doc, {
       title: "Snapshot Summary",
@@ -570,10 +609,9 @@ const downloadExpensePdf = async (req, res) => {
         { label: "Students Considered", value: String(source.values.total_students || 0) },
         { label: "Days In Month", value: String(source.values.days_in_month || 0) },
       ],
-      redrawHeader: renderHeader,
     });
 
-    drawSectionHeading(doc, "Billing Snapshot Breakdown", renderHeader);
+    drawSectionHeading(doc, "Billing Snapshot Breakdown");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -591,11 +629,10 @@ const downloadExpensePdf = async (req, res) => {
         })),
         { particular: "Static Charges Total", amount: formatCurrency(expense.dynamic_charge_total || 0) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Unit Price Reference", renderHeader);
+    drawSectionHeading(doc, "Unit Price Reference");
     drawTable(doc, {
       columns: [
         { label: "Item", width: 330, key: "item" },
@@ -606,14 +643,16 @@ const downloadExpensePdf = async (req, res) => {
         { item: "Chicken Unit Price", price: formatCurrency(expense.chicken_price || 0) },
         { item: "Paneer Unit Price", price: formatCurrency(expense.paneer_price || 0) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
     drawSignatureBlock(doc, {
-      leftLabel: "Prepared By Hostel Office",
-      rightLabel: "Verified By Chief Warden / Dean",
-      redrawHeader: renderHeader,
+      signatures: [
+        { label: "Caretaker" },
+        { label: "Warden" },
+        { label: "Dean and Chairman, Hostel Supervisory Committee" },
+      ],
+      footerDate: expense.updatedAt || expense.createdAt,
     });
 
     doc.end();

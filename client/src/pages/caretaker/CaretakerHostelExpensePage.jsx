@@ -276,7 +276,10 @@ export function CaretakerHostelExpensePage() {
     return (
       <div className="space-y-3">
         {items.map((item, index) => (
-          <div key={`${fieldKey}-${index}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:grid-cols-[1fr_0.9fr_1.3fr_0.8fr_auto]">
+          <div
+            key={`${fieldKey}-${index}`}
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:grid-cols-[1fr_0.9fr_0.9fr_1.3fr_0.8fr_auto]"
+          >
             <Input
               placeholder="Store name"
               value={item.store_name}
@@ -286,6 +289,11 @@ export function CaretakerHostelExpensePage() {
               placeholder="Bill number"
               value={item.bill_number}
               onChange={(event) => updateBillItem(fieldKey, index, "bill_number", event.target.value)}
+            />
+            <Input
+              placeholder="Cheque (optional)"
+              value={item.cheque_number}
+              onChange={(event) => updateBillItem(fieldKey, index, "cheque_number", event.target.value)}
             />
             <Input
               placeholder="Brief description"

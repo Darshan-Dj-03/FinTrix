@@ -40,6 +40,44 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
 
   const totalAmount = roundUpCurrency(bill.total_amount || 0);
   const amountPaid = roundUpCurrency(bill.amount_paid || 0);
+  const isEblStudent = Boolean(bill.is_ebl_student);
+  if (isEblStudent) {
+    const hasClaimSettlement =
+      bill.payment_status === "paid" || (Boolean(String(bill.student_utr_number || "").trim()) && amountPaid > 0);
+    const manualFine = 0;
+    const liveFine = 0;
+    const totalPayable = 0;
+
+    if (typeof bill.toObject === "function") {
+      const plain = bill.toObject();
+      return {
+        ...plain,
+        total_amount: totalAmount,
+        fine: liveFine,
+        manual_fine: manualFine,
+        late_fine: 0,
+        amount_paid: amountPaid,
+        payment_status: hasClaimSettlement ? "paid" : "ebl",
+        total_payable: totalPayable,
+        outstanding_amount: 0,
+        student_utr_number: plain.student_utr_number || "",
+      };
+    }
+
+    return {
+      ...bill,
+      total_amount: totalAmount,
+      fine: liveFine,
+      manual_fine: manualFine,
+      late_fine: 0,
+      amount_paid: amountPaid,
+      payment_status: hasClaimSettlement ? "paid" : "ebl",
+      total_payable: totalPayable,
+      outstanding_amount: 0,
+      student_utr_number: bill.student_utr_number || "",
+    };
+  }
+
   const storedFine = roundUpCurrency(bill.fine || 0);
   const currentLateFine = calculateDynamicFine(bill.due_date, currentDate);
   const wasMarkedPaid =

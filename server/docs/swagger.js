@@ -104,8 +104,32 @@ const specification = swaggerJsdoc({
       "/report/dean-approve/{month}": { put: { summary: "Dean approve report", responses: { 200: { description: "Dean approval saved" } } } },
       "/report/status/{month}": { get: { summary: "Get report status", responses: { 200: { description: "Status fetched" } } } },
       "/report/full/{month}": { get: { summary: "Get full report snapshot", responses: { 200: { description: "Report fetched" } } } },
-      "/ebl/request/{studentId}": { put: { summary: "Request EBL", responses: { 200: { description: "EBL requested" } } } },
-      "/ebl/approve/{studentId}": { put: { summary: "Approve or reject EBL", responses: { 200: { description: "EBL decision saved" } } } },
+      "/ebl/student": { get: { summary: "Get student EBL reimbursement status", responses: { 200: { description: "EBL status fetched" } } } },
+      "/ebl/periods": {
+        get: { summary: "List EBL reimbursement periods", responses: { 200: { description: "EBL periods fetched" } } },
+        post: { summary: "Create EBL reimbursement period", responses: { 201: { description: "EBL period created" } } },
+      },
+      "/ebl/periods/{id}": {
+        put: {
+          summary: "Update EBL reimbursement period",
+          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+          responses: { 200: { description: "EBL period updated" } },
+        },
+      },
+      "/ebl/periods/{id}/verify": {
+        put: {
+          summary: "Verify EBL reimbursement period",
+          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+          responses: { 200: { description: "EBL period verified" } },
+        },
+      },
+      "/ebl/periods/{id}/approve": {
+        put: {
+          summary: "Approve EBL reimbursement period by warden",
+          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+          responses: { 200: { description: "EBL period approved" } },
+        },
+      },
       "/charges/add": { post: { summary: "Create charge", responses: { 201: { description: "Charge created" } } } },
       "/charges/{month}": { get: { summary: "List charges", responses: { 200: { description: "Charges fetched" } } } },
       "/ledger/create/{month}": { post: { summary: "Create ledger", responses: { 201: { description: "Ledger created" } } } },

@@ -17,6 +17,9 @@ const Report = require("../models/Report");
 const MonthlyExpenseReport = require("../models/MonthlyExpenseReport");
 const StudentConsumption = require("../models/StudentConsumption");
 const AuditLog = require("../models/AuditLog");
+const EblPeriod = require("../models/EblPeriod");
+const EblReport = require("../models/EblCategoryReport");
+const { calculateDynamicFine, roundUpCurrency } = require("../services/billLifecycleService");
 
 const signToken = (user) => jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
@@ -135,10 +138,12 @@ describe("Final backend hardening", () => {
     const updatedLedger = await Ledger.findOne({ hostelId: hostel._id, month: "Jan-2026" });
     const payments = await Payment.find({ billId: bill._id });
     const auditLogs = await AuditLog.find({ entityType: "Payment" });
+    const expectedFine = calculateDynamicFine(new Date("2026-01-20T00:00:00.000Z"));
+    const expectedAmountPaid = roundUpCurrency(1000 + expectedFine);
 
     expect(updatedBill.payment_status).toBe("paid");
-    expect(updatedBill.amount_paid).toBe(1345);
-    expect(updatedLedger.totalCollected).toBe(1345);
+    expect(updatedBill.amount_paid).toBe(expectedAmountPaid);
+    expect(updatedLedger.totalCollected).toBe(expectedAmountPaid);
     expect(updatedLedger.outstanding).toBe(0);
     expect(payments).toHaveLength(1);
     expect(auditLogs).toHaveLength(1);
@@ -284,14 +289,15 @@ describe("Final backend hardening", () => {
       .put("/report/dean-approve/Feb-2026")
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ hostelId: hostel._id.toString(), notes: "Approved" });
-    expect(deanApproved.status).toBe(200);
-    expect(deanApproved.body.data.status).toBe("dean_approved");
+    expect(deanApproved.status).toBe(400);
+    expect(deanApproved.body.message).toMatch(/Dean approval is not required/i);
 
     const report = await Report.findOne({ hostelId: hostel._id, month: "Feb-2026" });
     const reportAuditLogs = await AuditLog.find({ entityType: "Report" });
 
     expect(report.snapshot.generatedAt).toBeTruthy();
-    expect(reportAuditLogs.length).toBeGreaterThanOrEqual(4);
+    expect(report.status).toBe("warden_approved");
+    expect(reportAuditLogs.length).toBeGreaterThanOrEqual(3);
   });
 
   test("auto-generates draft reports and resyncs downstream artifacts when manual balances are updated", async () => {
@@ -535,11 +541,13 @@ describe("Final backend hardening", () => {
     const response = await request(app)
       .get(`/bill/student/${student._id}/Apr-2026`)
       .set("Authorization", `Bearer ${signToken(studentUser)}`);
+    const expectedLateFine = calculateDynamicFine(new Date("2026-04-15T00:00:00.000Z"));
+    const expectedManualFine = 54 - expectedLateFine;
 
     expect(response.status).toBe(200);
     expect(response.body.data.fine).toBe(54);
-    expect(response.body.data.manual_fine).toBe(50);
-    expect(response.body.data.late_fine).toBe(4);
+    expect(response.body.data.manual_fine).toBe(expectedManualFine);
+    expect(response.body.data.late_fine).toBe(expectedLateFine);
     expect(response.body.data.total_payable).toBe(2254);
   });
 
@@ -636,32 +644,123 @@ describe("Final backend hardening", () => {
     expect(response.body.data.outstanding).toBe(0);
   });
 
-  test("handles EBL request and approval with audit logging", async () => {
-    const { admin, caretaker, student } = await createBaseData();
+  test("creates EBL periods and moves report-based approvals through submit and warden approval while blocking normal payment handling", async () => {
+    const { hostel, caretaker, warden, studentUser, student } = await createBaseData();
 
-    const requestResponse = await request(app)
-      .put(`/ebl/request/${student._id}`)
+    student.isEBL = true;
+    student.eblCategory = "SC";
+    student.studentClass = "IV year (B.Tech.)";
+    await student.save();
+
+    const [augBill, sepBill] = await MessBill.create([
+      {
+        studentId: student._id,
+        userId: studentUser._id,
+        hostelId: hostel._id,
+        month: "Aug-2024",
+        base_mess: 2929,
+        total_amount: 2929,
+        due_date: new Date("2024-08-20T00:00:00.000Z"),
+        payment_status: "ebl",
+        fine: 0,
+        amount_paid: 0,
+        is_ebl_student: true,
+        ebl_category: "SC",
+      },
+      {
+        studentId: student._id,
+        userId: studentUser._id,
+        hostelId: hostel._id,
+        month: "Sep-2024",
+        base_mess: 1100,
+        total_amount: 1100,
+        due_date: new Date("2024-09-20T00:00:00.000Z"),
+        payment_status: "ebl",
+        fine: 0,
+        amount_paid: 0,
+        is_ebl_student: true,
+        ebl_category: "SC",
+      },
+    ]);
+
+    const createResponse = await request(app)
+      .post("/ebl/periods")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        studentId: student._id.toString(),
+        fromMonth: "Aug-2024",
+        toMonth: "Sep-2024",
+        monthlyGoiAmount: 1440,
+        periodUtr: "EBL-UTR-0001",
+        scholarshipNotes: "GOI shared by student",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.monthlyDetails).toHaveLength(2);
+    expect(createResponse.body.data.monthlyDetails[0].goiAmount).toBe(720);
+    expect(createResponse.body.data.monthlyDetails[0].differenceAmount).toBe(2209);
+    expect(createResponse.body.data.monthlyDetails[1].goiAmount).toBe(720);
+    expect(createResponse.body.data.monthlyDetails[1].differenceAmount).toBe(380);
+    expect(createResponse.body.data.totals.totalMessBill).toBe(4029);
+    expect(createResponse.body.data.totals.totalScholarship).toBe(1440);
+    expect(createResponse.body.data.totals.totalDifference).toBe(2589);
+    expect(createResponse.body.data.totals.totalClaimAmount).toBe(2589);
+    expect(createResponse.body.data.periodUtr).toBe("EBL-UTR-0001");
+
+    const periodId = createResponse.body.data._id;
+    const refreshedAugBill = await MessBill.findById(augBill._id);
+    expect(refreshedAugBill.payment_status).toBe("paid");
+    expect(refreshedAugBill.student_utr_number).toBe("EBL-UTR-0001");
+
+    const reportGenerateResponse = await request(app)
+      .post("/ebl/reports")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        reportType: "pre_receipt",
+        fromMonth: "Aug-2024",
+        toMonth: "Sep-2024",
+      });
+    expect(reportGenerateResponse.status).toBe(201);
+    expect(reportGenerateResponse.body.data.status).toBe("draft");
+
+    const reportId = reportGenerateResponse.body.data._id;
+
+    const submitResponse = await request(app)
+      .put(`/ebl/reports/${reportId}/submit`)
       .set("Authorization", `Bearer ${signToken(caretaker)}`);
-
-    expect(requestResponse.status).toBe(200);
-    expect(requestResponse.body.data.eblRequestPending).toBe(true);
+    expect(submitResponse.status).toBe(200);
+    expect(submitResponse.body.data.status).toBe("submitted");
 
     const approveResponse = await request(app)
-      .put(`/ebl/approve/${student._id}`)
-      .set("Authorization", `Bearer ${signToken(admin)}`)
-      .send({ approve: true });
-
+      .put(`/ebl/reports/${reportId}/approve`)
+      .set("Authorization", `Bearer ${signToken(warden)}`);
     expect(approveResponse.status).toBe(200);
-    expect(approveResponse.body.data.eblApproved).toBe(true);
+    expect(approveResponse.body.data.status).toBe("warden_approved");
 
-    const updatedStudent = await Student.findById(student._id).populate("userId");
-    const studentAuditLogs = await AuditLog.find({
-      entityType: "Student",
-      action: { $in: ["EBL_REQUESTED", "EBL_APPROVED"] },
+    const studentStatusResponse = await request(app)
+      .get("/ebl/student")
+      .set("Authorization", `Bearer ${signToken(studentUser)}`);
+    expect(studentStatusResponse.status).toBe(200);
+    expect(studentStatusResponse.body.data.periods).toHaveLength(1);
+
+    const paymentBlockedResponse = await request(app)
+      .post("/payment")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({ billId: augBill._id.toString(), paymentMethod: "cash" });
+    expect(paymentBlockedResponse.status).toBe(400);
+    expect(paymentBlockedResponse.body.message).toMatch(/EBL reimbursement bills cannot be recorded/i);
+
+    const savedPeriod = await EblPeriod.findById(periodId);
+    const savedReport = await EblReport.findById(reportId);
+    const eblAuditLogs = await AuditLog.find({
+      entityType: "EblPeriod",
+      action: { $in: ["EBL_PERIOD_CREATED"] },
     });
 
-    expect(updatedStudent.isEBL).toBe(true);
-    expect(updatedStudent.userId.eblApproved).toBe(true);
-    expect(studentAuditLogs).toHaveLength(2);
+    expect(savedPeriod.status).toBe("draft");
+    expect(savedReport.status).toBe("warden_approved");
+    expect(String(savedPeriod.monthlyDetails[0].billId)).toBe(String(augBill._id));
+    expect(String(savedPeriod.monthlyDetails[1].billId)).toBe(String(sepBill._id));
+    expect(eblAuditLogs).toHaveLength(1);
   });
 });

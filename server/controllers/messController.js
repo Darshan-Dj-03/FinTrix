@@ -11,8 +11,13 @@ const { generateMessBills } = require("../services/calculationService");
 const { applyLiveBillState, DEFAULT_UTR_MESSAGE } = require("../services/billLifecycleService");
 const {
   notifyStudentBillGenerated,
+  notifyStudentBillGeneratedInApp,
   notifyReportStakeholders,
   notifyCaretakerApproval,
+  notifyReportGeneratedInApp,
+  notifyReportSubmittedInApp,
+  notifyReportApprovedInApp,
+  notifyCaretakerPaymentUpdatedInApp,
 } = require("../services/notificationService");
 const { runInTransaction } = require("../utils/transaction");
 const { getPagination, buildPaginationMeta } = require("../utils/pagination");
@@ -251,7 +256,9 @@ const generateBills = async (req, res) => {
       return sortBillsByStudentId(populatedBills);
     });
 
-    await Promise.allSettled(populatedBills.map((bill) => notifyStudentBillGenerated(bill)));
+    await Promise.allSettled(
+      populatedBills.flatMap((bill) => [notifyStudentBillGenerated(bill), notifyStudentBillGeneratedInApp(bill)])
+    );
 
     return res.status(201).json({
       success: true,
@@ -583,6 +590,13 @@ const generateMessBillReport = async (req, res) => {
       triggeredByName: req.user.name,
       triggerLabel: "The mess bill per student report has been generated",
     });
+    await notifyReportGeneratedInApp({
+      month,
+      hostelId: query.hostelId,
+      reportName: "Mess Bill Per Student Report",
+      generatedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(200).json({
       success: true,
@@ -624,6 +638,13 @@ const submitMessBillReport = async (req, res) => {
       hostelId: query.hostelId,
       triggeredByName: req.user.name,
       triggerLabel: "The mess bill per student report has been submitted",
+    });
+    await notifyReportSubmittedInApp({
+      month,
+      hostelId: query.hostelId,
+      reportName: "Mess Bill Per Student Report",
+      submittedByName: req.user.name,
+      actor: req.user,
     });
 
     return res.status(200).json({
@@ -673,6 +694,14 @@ const approveMessBillReportByWarden = async (req, res) => {
         approverName: req.user.name,
         notes: notes || "",
       }),
+      notifyReportApprovedInApp({
+        month,
+        hostelId: query.hostelId,
+        reportName: "Mess Bill Per Student Report",
+        approverRole: "warden",
+        approverName: req.user.name,
+        actor: req.user,
+      }),
     ]);
 
     return res.status(200).json({
@@ -688,6 +717,11 @@ const approveMessBillReportByWarden = async (req, res) => {
 
 const approveMessBillReportByDean = async (req, res) => {
   try {
+    return res.status(400).json({
+      success: false,
+      message: "Dean approval is not required for the mess bill per student report. Warden approval is the final step for this report.",
+    });
+
     const { month } = req.params;
     const query = resolveHostelScopedBillQuery(req, month);
     const { notes } = req.body;
@@ -721,6 +755,14 @@ const approveMessBillReportByDean = async (req, res) => {
         approverRole: "Dean/Admin",
         approverName: req.user.name,
         notes: notes || "",
+      }),
+      notifyReportApprovedInApp({
+        month,
+        hostelId: query.hostelId,
+        reportName: "Mess Bill Per Student Report",
+        approverRole: "dean",
+        approverName: req.user.name,
+        actor: req.user,
       }),
     ]);
 
@@ -834,6 +876,13 @@ const updateStudentPaymentDetails = async (req, res) => {
       return res.status(403).json({ success: false, message: "You can only update your own payment details." });
     }
 
+    if (bill.is_ebl_student || bill.payment_status === "ebl") {
+      return res.status(400).json({
+        success: false,
+        message: "EBL reimbursement bills do not use the regular student payment UTR flow.",
+      });
+    }
+
     const normalizedPaymentModeInput =
       paymentMode === undefined || paymentMode === null ? "" : String(paymentMode).trim().toLowerCase();
     const normalizedUtrNumber = String(utrNumber || "").trim();
@@ -853,6 +902,11 @@ const updateStudentPaymentDetails = async (req, res) => {
     bill.student_payment_made_date = resolvedPaymentDate;
     bill.student_utr_number = resolvedPaymentMode === "upi" ? normalizedUtrNumber : "";
     await bill.save();
+    await notifyCaretakerPaymentUpdatedInApp({
+      bill,
+      studentName: bill.userId?.name,
+      month: bill.month,
+    });
 
     return res.status(200).json({
       success: true,

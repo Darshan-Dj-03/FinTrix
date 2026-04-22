@@ -29,6 +29,7 @@ export const navigationByRole = {
     { label: "Guest Charge", to: "/caretaker/guest-charge", icon: Users },
     { label: "Static Charges", to: "/caretaker/charges", icon: Sparkles },
     { label: "Hostel Expense", to: "/caretaker/hostel-expense", icon: Calculator },
+    { label: "EBL Claims", to: "/caretaker/ebl", icon: ShieldCheck },
     { label: "Advances", to: "/caretaker/advances", icon: Landmark },
     { label: "Expenses", to: "/caretaker/expenses", icon: IndianRupee },
     { label: "Bills", to: "/caretaker/bills", icon: Receipt },

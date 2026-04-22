@@ -11,6 +11,8 @@
     "import:consumption": "node scripts/importConsumptionFromJson.js",
     "seed:consumption": "node scripts/seedConsumption.js",
     "seed:students": "node scripts/seedStudents.js",
+    "seed:ebl-test-bills": "node scripts/seedEblTestBills.js",
+    "cleanup:ebl-test-bills": "node scripts/deleteEblTestBills.js",
     "update:student-genders": "node scripts/updateSeedStudentGenders.js",
     "delete:students": "node scripts/deleteSeedStudents.js"
   },

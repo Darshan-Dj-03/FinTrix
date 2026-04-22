@@ -13,4 +13,8 @@ export const authApi = {
     const { data } = await apiClient.post("/auth/change-password", payload);
     return data;
   },
+  updateProfile: async (payload) => {
+    const { data } = await apiClient.put("/auth/profile", payload);
+    return data;
+  },
 };

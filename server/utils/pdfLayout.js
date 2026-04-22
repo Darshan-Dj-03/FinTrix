@@ -1,7 +1,11 @@
+const path = require("path");
+
 const PDFDocument = require("pdfkit");
 
-const UNIVERSITY_NAME = "UNIVERSITY OF HORTICULTURAL SCIENCES, BAGALKOTE";
-const UNIVERSITY_SUBTITLE = "Hostel Mess Management & Financial Reporting System";
+const UNIVERSITY_NAME = "COLLEGE OF HORTICULTURE ENGINEERING AND FOOD TECHNOLOGY";
+const UNIVERSITY_SUBTITLE = "DEVIHOSUR, HAVERI";
+const UNIVERSITY_SYSTEM_LABEL = "University of Horticultural Sciences, Bagalkote";
+const LOGO_PATH = path.resolve(__dirname, "../../client/src/public/college_logo.png");
 
 const formatCurrency = (value) => `Rs. ${Number(value || 0).toFixed(2)}`;
 
@@ -16,6 +20,22 @@ const formatDate = (value) => {
   }
 
   return date.toLocaleDateString("en-IN");
+};
+
+const formatDisplayDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
 };
 
 const createPdfDocument = (res, filename, options = {}) => {
@@ -53,50 +73,76 @@ const createBufferedPdfDocument = (options = {}) => {
   return { doc, done };
 };
 
-const drawUniversityHeader = (doc, { reportTitle, hostelName, month, generatedBy, generatedAt, officeLabel }) => {
+const drawUniversityHeader = (
+  doc,
+  { reportTitle, hostelName, month, generatedBy, generatedAt, officeLabel, documentNumber }
+) => {
   const left = doc.page.margins.left;
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-  doc
-    .font("Times-Bold")
-    .fontSize(17)
-    .fillColor("#111827")
-    .text(UNIVERSITY_NAME, left, doc.y, { width, align: "center" });
+  const topY = doc.y;
 
-  doc
-    .moveDown(0.15)
-    .font("Times-Roman")
-    .fontSize(10)
-    .fillColor("#4b5563")
-    .text(UNIVERSITY_SUBTITLE, { width, align: "center" });
+  doc.font("Times-Bold").fontSize(15).fillColor("#111827").text(UNIVERSITY_NAME, left, topY, {
+    width,
+    align: "center",
+  });
 
-  if (officeLabel) {
-    doc
-      .moveDown(0.1)
-      .font("Times-Italic")
-      .fontSize(10)
-      .fillColor("#475569")
-      .text(officeLabel, { width, align: "center" });
+  doc.moveDown(0.08).font("Times-Bold").fontSize(12).fillColor("#111827").text(UNIVERSITY_SUBTITLE, {
+    width,
+    align: "center",
+  });
+
+  doc.moveDown(0.05).font("Times-Roman").fontSize(8.5).fillColor("#475569").text(UNIVERSITY_SYSTEM_LABEL, {
+    width,
+    align: "center",
+  });
+
+  const logoWidth = 38;
+  const logoX = left + width / 2 - logoWidth / 2;
+  const logoY = doc.y + 4;
+  try {
+    doc.image(LOGO_PATH, logoX, logoY, {
+      fit: [logoWidth, logoWidth],
+      align: "center",
+    });
+  } catch (error) {
+    // Continue rendering even if the logo file is unavailable.
   }
 
-  doc
-    .moveDown(0.9)
-    .font("Times-Bold")
-    .fontSize(18)
-    .fillColor("#0f172a")
-    .text(reportTitle, { width, align: "center" });
+  doc.y = logoY + logoWidth + 4;
 
-  const metaRows = [
-    `Hostel: ${hostelName || "-"}`,
-    `Month: ${month || "-"}`,
-    generatedBy ? `Prepared By: ${generatedBy}` : null,
-    generatedAt ? `Prepared On: ${formatDate(generatedAt)}` : null,
-  ].filter(Boolean);
+  doc.font("Times-Bold").fontSize(13).fillColor("#0f172a").text(reportTitle, left, doc.y, {
+    width,
+    align: "center",
+  });
 
-  doc.moveDown(0.35).font("Times-Roman").fontSize(10).fillColor("#334155");
-  metaRows.forEach((row) => doc.text(row, { width, align: "center" }));
+  if (officeLabel) {
+    doc.moveDown(0.06).font("Times-Italic").fontSize(8.5).fillColor("#475569").text(officeLabel, {
+      width,
+      align: "center",
+    });
+  }
 
-  const ruleY = doc.y + 14;
+  doc.moveDown(0.25);
+  doc.font("Times-Roman").fontSize(9).fillColor("#334155");
+  doc.text(`Hostel: ${hostelName || "-"}`, left, doc.y, { width: width * 0.5, align: "left" });
+  doc.text(`Date: ${formatDisplayDate(generatedAt || new Date())}`, left + width * 0.5, doc.y, {
+    width: width * 0.5,
+    align: "right",
+  });
+  doc.moveDown(0.1);
+  doc.text(`Month / Period: ${month || "-"}`, left, doc.y, { width: width * 0.5, align: "left" });
+  doc.text(`Prepared By: ${generatedBy || "-"}`, left + width * 0.5, doc.y, {
+    width: width * 0.5,
+    align: "right",
+  });
+
+  if (documentNumber) {
+    doc.moveDown(0.1);
+    doc.text(`No: ${documentNumber}`, left, doc.y, { width, align: "left" });
+  }
+
+  const ruleY = doc.y + 8;
   doc
     .moveTo(left, ruleY)
     .lineTo(left + width, ruleY)
@@ -104,7 +150,7 @@ const drawUniversityHeader = (doc, { reportTitle, hostelName, month, generatedBy
     .strokeColor("#cbd5e1")
     .stroke();
 
-  doc.y = ruleY + 14;
+  doc.y = ruleY + 10;
 };
 
 const ensureSpace = (doc, neededHeight, redrawHeader) => {
@@ -139,28 +185,36 @@ const getCellHeight = (doc, text, width, font = "Times-Roman", fontSize = 10) =>
 };
 
 const drawTable = (doc, { columns, rows, redrawHeader, zebra = true, headerFill = "#e2e8f0", rowPadding = 6, fontSize = 9.5 }) => {
-  const left = doc.page.margins.left;
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  const left = doc.page.margins.left + Math.max(0, (usableWidth - tableWidth) / 2);
   const drawHeaderRow = () => {
-    ensureSpace(doc, 26, redrawHeader);
+    const headerHeight = Math.max(
+      24,
+      ...columns.map((column) =>
+        getCellHeight(doc, column.label, column.width, "Times-Bold", column.headerFontSize || 9.5)
+      )
+    ) + 10;
+
+    ensureSpace(doc, headerHeight + 2, redrawHeader);
     let x = left;
     const y = doc.y;
     doc.save();
-    doc.rect(left, y, tableWidth, 24).fill(headerFill);
+    doc.rect(left, y, tableWidth, headerHeight).fill(headerFill);
     doc.restore();
 
     columns.forEach((column) => {
       doc
         .font("Times-Bold")
-        .fontSize(9.5)
+        .fontSize(column.headerFontSize || 9.5)
         .fillColor("#0f172a")
-        .text(column.label, x + 5, y + 7, {
+        .text(column.label, x + 5, y + 5, {
           width: column.width - 10,
           align: column.align || "left",
         });
       x += column.width;
     });
-    doc.y = y + 24;
+    doc.y = y + headerHeight;
   };
 
   drawHeaderRow();
@@ -255,20 +309,91 @@ const drawSummaryPanel = (doc, { title, items, redrawHeader }) => {
   doc.y = y + boxHeight + 10;
 };
 
-const drawSignatureBlock = (doc, { leftLabel = "Prepared By", rightLabel = "Verified By", redrawHeader }) => {
-  ensureSpace(doc, 70, redrawHeader);
+const drawContactDetailsBlock = (doc, { warden, caretaker, redrawHeader }) => {
   const left = doc.page.margins.left;
   const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const lineWidth = 180;
-  const topY = doc.y + 18;
+  const columnWidth = Math.min(250, Math.floor(usableWidth / 2) - 20);
+  const lineHeight = 14;
+  const blockHeight = 64;
 
-  doc.moveTo(left, topY).lineTo(left + lineWidth, topY).strokeColor("#94a3b8").stroke();
-  doc.moveTo(left + usableWidth - lineWidth, topY).lineTo(left + usableWidth, topY).strokeColor("#94a3b8").stroke();
+  ensureSpace(doc, blockHeight, redrawHeader);
 
-  doc.font("Times-Roman").fontSize(10).fillColor("#475569");
-  doc.text(leftLabel, left, topY + 6, { width: lineWidth, align: "center" });
-  doc.text(rightLabel, left + usableWidth - lineWidth, topY + 6, { width: lineWidth, align: "center" });
-  doc.y = topY + 28;
+  const topY = doc.y;
+  const drawColumn = (x, title, details, align = "left") => {
+    doc.font("Times-Bold").fontSize(10).fillColor("#111827").text(title, x, topY, {
+      width: columnWidth,
+      align,
+    });
+
+    const rows = [
+      details?.name || "-",
+      `Phone: ${details?.phoneNumber || "-"}`,
+      `Email: ${details?.email || "-"}`,
+    ];
+
+    let rowY = topY + 14;
+    rows.forEach((row) => {
+      doc.font("Times-Roman").fontSize(9.5).fillColor("#334155").text(row, x, rowY, {
+        width: columnWidth,
+        align,
+      });
+      rowY += lineHeight;
+    });
+  };
+
+  drawColumn(left, "Warden Details", warden, "left");
+  drawColumn(left + usableWidth - columnWidth, "Caretaker Details", caretaker, "right");
+
+  const ruleY = topY + blockHeight - 4;
+  doc
+    .moveTo(left, ruleY)
+    .lineTo(left + usableWidth, ruleY)
+    .lineWidth(0.8)
+    .strokeColor("#cbd5e1")
+    .stroke();
+
+  doc.y = ruleY + 10;
+};
+
+const drawSignatureBlock = (
+  doc,
+  {
+    leftLabel = "Warden",
+    rightLabel = "Dean and Chairman, Hostel Supervisory Committee",
+    redrawHeader,
+    footerDate,
+    signatures,
+  }
+) => {
+  ensureSpace(doc, 150, redrawHeader);
+  const left = doc.page.margins.left;
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const signatureSlots =
+    Array.isArray(signatures) && signatures.length
+      ? signatures
+      : [{ label: leftLabel }, { label: rightLabel }];
+  const slotGap = 22;
+  const totalGap = slotGap * Math.max(0, signatureSlots.length - 1);
+  const lineWidth = Math.min(170, (usableWidth - totalGap) / signatureSlots.length);
+  const dateLabel = `Date: ${formatDisplayDate(footerDate || new Date())}`;
+  const dateY = doc.y + 20;
+  const topY = dateY + 48;
+
+  doc.font("Times-Roman").fontSize(10).fillColor("#334155").text(dateLabel, left, dateY, {
+    width: usableWidth,
+    align: "left",
+  });
+
+  signatureSlots.forEach((signature, index) => {
+    const x = left + index * (lineWidth + slotGap);
+    doc.moveTo(x, topY).lineTo(x + lineWidth, topY).strokeColor("#94a3b8").stroke();
+    doc.font("Times-Roman").fontSize(10).fillColor("#475569").text(signature.label, x, topY + 8, {
+      width: lineWidth,
+      align: "center",
+    });
+  });
+
+  doc.y = topY + 52;
 };
 
 module.exports = {
@@ -282,8 +407,10 @@ module.exports = {
   drawTable,
   drawKeyValueTable,
   drawSummaryPanel,
+  drawContactDetailsBlock,
   drawSignatureBlock,
   ensureSpace,
   formatCurrency,
   formatDate,
+  formatDisplayDate,
 };

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { buildMonthValue, CURRENT_MONTH, MONTH_LABELS, MONTH_OPTIONS, parseMonthValue } from "../../utils/constants";
@@ -7,9 +8,12 @@ const getSafeMonth = (value) => (MONTH_OPTIONS.includes(value) ? value : CURRENT
 
 export function MonthPicker({ label = "Month", value, onChange, className }) {
   const wrapperRef = useRef(null);
+  const triggerRef = useRef(null);
+  const popupRef = useRef(null);
   const safeValue = getSafeMonth(value);
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(parseMonthValue(safeValue).year);
+  const [popupStyle, setPopupStyle] = useState(null);
 
   useEffect(() => {
     setViewYear(parseMonthValue(safeValue).year);
@@ -17,14 +21,54 @@ export function MonthPicker({ label = "Month", value, onChange, className }) {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (!wrapperRef.current?.contains(event.target)) {
+      if (wrapperRef.current?.contains(event.target) || popupRef.current?.contains(event.target)) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
         setOpen(false);
       }
     };
 
     window.addEventListener("mousedown", handleClickOutside);
-    return () => window.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleEscape);
+    };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const maxWidth = Math.min(320, window.innerWidth - 24);
+      const left = Math.min(Math.max(12, rect.right - maxWidth), window.innerWidth - maxWidth - 12);
+
+      setPopupStyle({
+        position: "fixed",
+        top: Math.min(rect.bottom + 12, window.innerHeight - 24),
+        left,
+        width: maxWidth,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
 
   const years = useMemo(
     () => [...new Set(MONTH_OPTIONS.map((option) => parseMonthValue(option).year))].sort((a, b) => b - a),
@@ -57,6 +101,7 @@ export function MonthPicker({ label = "Month", value, onChange, className }) {
         </button>
         <button
           type="button"
+          ref={triggerRef}
           className="flex h-11 min-w-0 flex-1 items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 transition hover:border-brand-300 hover:ring-4 hover:ring-brand-100 sm:min-w-[190px] sm:px-4"
           onClick={() => setOpen((currentOpen) => !currentOpen)}
         >
@@ -78,8 +123,13 @@ export function MonthPicker({ label = "Month", value, onChange, className }) {
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      {open ? (
-        <div className="absolute left-0 right-0 z-30 mt-3 rounded-[28px] border border-slate-200 bg-white p-4 shadow-soft sm:left-auto sm:right-0 sm:w-[320px]">
+      {open && popupStyle
+        ? createPortal(
+        <div
+          ref={popupRef}
+          style={popupStyle}
+          className="z-[120] rounded-[28px] border border-slate-200 bg-white p-4 shadow-2xl"
+        >
           <div className="mb-4 flex items-center justify-between">
             <button
               type="button"
@@ -135,7 +185,8 @@ export function MonthPicker({ label = "Month", value, onChange, className }) {
           >
             Jump to current month
           </button>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

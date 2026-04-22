@@ -28,7 +28,7 @@ export function AdminStudentsPage() {
       <PageHeader
         eyebrow="Students"
         title="Student registry"
-        description="Inspect hostel assignment, EBL state, and active status for each student."
+        description="Inspect hostel assignment, EBL applicability, and active status for each student."
       />
 
       <DataTable
@@ -37,7 +37,7 @@ export function AdminStudentsPage() {
           { key: "studentId", label: "Student ID" },
           { key: "name", label: "Name", render: (row) => row.userId?.name || "-" },
           { key: "hostel", label: "Hostel", render: (row) => row.userId?.hostelId?.name || "-" },
-          { key: "ebl", label: "EBL", render: (row) => <StatusBadge value={row.isEBL ? "approved" : "pending"} /> },
+          { key: "ebl", label: "EBL", render: (row) => <StatusBadge value={row.isEBL ? "enrolled" : "not_applicable"} /> },
           { key: "active", label: "Active", render: (row) => <StatusBadge value={row.isActive ? "paid" : "pending"} /> },
           {
             key: "actions",

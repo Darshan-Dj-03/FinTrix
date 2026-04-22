@@ -18,17 +18,25 @@ const {
   buildReportSource,
   calculateMonthlyExpenseReport,
 } = require("../services/monthlyExpenseReportService");
-const { notifyStudentBillGenerated } = require("../services/notificationService");
+const {
+  notifyStudentBillGenerated,
+  notifyStudentBillGeneratedInApp,
+  notifyReportGeneratedInApp,
+  notifyReportSubmittedInApp,
+  notifyReportApprovedInApp,
+} = require("../services/notificationService");
 const logger = require("../utils/logger");
 const {
   createPdfDocument,
   drawUniversityHeader,
+  drawContactDetailsBlock,
   drawSectionHeading,
   drawTable,
   drawSummaryPanel,
   drawSignatureBlock,
   formatCurrency,
 } = require("../utils/pdfLayout");
+const { resolveReportContacts } = require("../utils/reportContacts");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -481,7 +489,9 @@ const syncBillDependentArtifacts = async ({ hostelId, month, userId }) => {
   }
 
   if (!previouslyHadBills) {
-    await Promise.allSettled(populatedBills.map((bill) => notifyStudentBillGenerated(bill)));
+    await Promise.allSettled(
+      populatedBills.flatMap((bill) => [notifyStudentBillGenerated(bill), notifyStudentBillGeneratedInApp(bill)])
+    );
   }
 };
 
@@ -523,6 +533,13 @@ const createHostelExpense = async (req, res) => {
     });
 
     const populated = await created.populate(POPULATE_CONFIG);
+    await notifyReportGeneratedInApp({
+      month,
+      hostelId,
+      reportName: "Hostel Expenditure Details Report",
+      generatedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(201).json({
       success: true,
@@ -701,6 +718,13 @@ const submitHostelExpense = async (req, res) => {
     await record.save();
 
     const populated = await HostelExpense.findById(record._id).populate(POPULATE_CONFIG);
+    await notifyReportSubmittedInApp({
+      month,
+      hostelId: record.hostelId,
+      reportName: "Hostel Expenditure Details Report",
+      submittedByName: req.user.name,
+      actor: req.user,
+    });
 
     return res.status(200).json({
       success: true,
@@ -752,6 +776,14 @@ const approveHostelExpenseByWarden = async (req, res) => {
     await record.save();
 
     const populated = await HostelExpense.findById(record._id).populate(POPULATE_CONFIG);
+    await notifyReportApprovedInApp({
+      month,
+      hostelId,
+      reportName: "Hostel Expenditure Details Report",
+      approverRole: "warden",
+      approverName: req.user.name,
+      actor: req.user,
+    });
     return res.status(200).json({
       success: true,
       message: "Hostel expenditure details report approved by warden successfully.",
@@ -768,6 +800,11 @@ const approveHostelExpenseByWarden = async (req, res) => {
 
 const approveHostelExpenseByDean = async (req, res) => {
   try {
+    return res.status(400).json({
+      success: false,
+      message: "Dean approval is not required for the hostel expenditure details report. Warden approval is the final step for this report.",
+    });
+
     const { month } = req.params;
     const hostelId = req.body.hostelId || req.query.hostelId;
     const { notes } = req.body;
@@ -858,6 +895,10 @@ const downloadHostelExpensePdf = async (req, res) => {
       });
     }
 
+    const contacts = await resolveReportContacts({
+      hostelId: record.hostelId?._id || record.hostelId,
+      caretakerUserId: record.createdBy?._id || record.createdBy,
+    });
     const doc = createPdfDocument(res, `hostel-expense-${record.month}.pdf`);
 
     const renderHeader = () =>
@@ -871,6 +912,7 @@ const downloadHostelExpensePdf = async (req, res) => {
       });
 
     renderHeader();
+    drawContactDetailsBlock(doc, contacts);
 
     drawSummaryPanel(doc, {
       title: "Headcount Summary",
@@ -881,10 +923,9 @@ const downloadHostelExpensePdf = async (req, res) => {
         { label: "KEB Per Girl", value: formatCurrency(record.keb_per_girl || 0) },
         { label: "KEB Per Boy", value: formatCurrency(record.keb_per_boy || 0) },
       ],
-      redrawHeader: renderHeader,
     });
 
-    drawSectionHeading(doc, "Core Expenses", renderHeader);
+    drawSectionHeading(doc, "Core Expenses");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -904,11 +945,10 @@ const downloadHostelExpensePdf = async (req, res) => {
         { particular: "Labour Night Watch", amount: formatCurrency(record.labour_night_watch || 0) },
         { particular: "Hostel Fund", amount: formatCurrency(record.hostel_fund || 0) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Miscellaneous Expenses", renderHeader);
+    drawSectionHeading(doc, "Miscellaneous Expenses");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -921,11 +961,10 @@ const downloadHostelExpensePdf = async (req, res) => {
         { particular: "Bakery", amount: formatCurrency(record.bakery || 0) },
         { particular: "Misc Per Student", amount: formatCurrency(record.misc_per_student || 0) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Protein Pricing Matrix", renderHeader);
+    drawSectionHeading(doc, "Protein Pricing Matrix");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 250, key: "particular" },
@@ -953,11 +992,10 @@ const downloadHostelExpensePdf = async (req, res) => {
           perUnit: formatCurrency(record.paneer_price_per_unit || 0),
         },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
-    drawSectionHeading(doc, "Derived Labour & Electricity Splits", renderHeader);
+    drawSectionHeading(doc, "Derived Labour & Electricity Splits");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 330, key: "particular" },
@@ -969,14 +1007,16 @@ const downloadHostelExpensePdf = async (req, res) => {
         { particular: "KEB Per Girl", amount: formatCurrency(record.keb_per_girl || 0) },
         { particular: "KEB Per Boy", amount: formatCurrency(record.keb_per_boy || 0) },
       ],
-      redrawHeader: renderHeader,
       fontSize: 10,
     });
 
     drawSignatureBlock(doc, {
-      leftLabel: "Prepared By Hostel Office",
-      rightLabel: "Verified By Chief Warden / Dean",
-      redrawHeader: renderHeader,
+      signatures: [
+        { label: "Caretaker" },
+        { label: "Warden" },
+        { label: "Dean and Chairman, Hostel Supervisory Committee" },
+      ],
+      footerDate: record.updatedAt || record.createdAt,
     });
 
     doc.end();

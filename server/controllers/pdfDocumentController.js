@@ -5,6 +5,7 @@ const { applyLiveBillState } = require("../services/billLifecycleService");
 const {
   createPdfDocument,
   drawUniversityHeader,
+  drawContactDetailsBlock,
   drawSectionHeading,
   drawTable,
   drawSummaryPanel,
@@ -13,6 +14,7 @@ const {
   formatDate,
   ensureSpace,
 } = require("../utils/pdfLayout");
+const { resolveReportContacts } = require("../utils/reportContacts");
 
 const MONTH_INDEX = {
   Jan: 0,
@@ -169,10 +171,9 @@ const generateBillPDF = async (req, res) => {
         { label: "Hostel", value: liveBill.hostelId?.name || "-" },
         { label: "Due Date", value: formatDate(liveBill.due_date) },
       ],
-      redrawHeader: renderHeader,
     });
 
-    drawSectionHeading(doc, "Charge Breakdown", renderHeader);
+    drawSectionHeading(doc, "Charge Breakdown");
     drawTable(doc, {
       columns: [
         { label: "Particulars", width: 210, key: "particular" },
@@ -197,7 +198,6 @@ const generateBillPDF = async (req, res) => {
         { particular: "Electricity (KEB)", amount: formatCurrency(liveBill.keb_charge) },
         { particular: "Fine", amount: formatCurrency(liveBill.fine) },
       ],
-      redrawHeader: renderHeader,
     });
 
     drawSummaryPanel(doc, {
@@ -208,18 +208,16 @@ const generateBillPDF = async (req, res) => {
         { label: "Total Payable", value: formatCurrency(breakdown.totalPayable) },
         { label: "Payment Status", value: String(liveBill.payment_status || "pending").toUpperCase() },
       ],
-      redrawHeader: renderHeader,
     });
 
     drawApprovalFooter(
       doc,
-      renderHeader,
+      undefined,
       "Prepared for hostel office, student reference, and institutional audit review."
     );
     drawSignatureBlock(doc, {
       leftLabel: "Prepared By Hostel Office",
       rightLabel: "Student / Parent Acknowledgement",
-      redrawHeader: renderHeader,
     });
 
     doc.end();
@@ -272,7 +270,6 @@ const generatePaymentSlipPDF = async (req, res) => {
         { label: "Bill Month", value: month },
         { label: "Due Date", value: formatDate(liveBill.due_date) },
       ],
-      redrawHeader: renderHeader,
     });
 
     drawTable(doc, {
@@ -288,11 +285,10 @@ const generatePaymentSlipPDF = async (req, res) => {
         { particulars: "Paid So Far", amount: formatCurrency(paidSoFar), remarks: `${payments.length} recorded payment(s)` },
         { particulars: "Balance Due", amount: formatCurrency(balanceDue), remarks: String(liveBill.payment_status || "pending").toUpperCase() },
       ],
-      redrawHeader: renderHeader,
     });
 
     if (payments.length) {
-      drawSectionHeading(doc, "Payment History", renderHeader);
+      drawSectionHeading(doc, "Payment History");
       drawTable(doc, {
         columns: [
           { label: "Verified On", width: 110, key: "verifiedOn" },
@@ -306,19 +302,17 @@ const generatePaymentSlipPDF = async (req, res) => {
           utrNumber: payment.utrNumber || "-",
           amount: formatCurrency(payment.amount),
         })),
-        redrawHeader: renderHeader,
       });
     }
 
     drawApprovalFooter(
       doc,
-      renderHeader,
+      undefined,
       "Payment advice reflects the current verified collection record of the hostel office."
     );
     drawSignatureBlock(doc, {
       leftLabel: "Verified By Hostel Office",
       rightLabel: "Student Copy",
-      redrawHeader: renderHeader,
     });
 
     doc.end();
@@ -366,6 +360,9 @@ const generateMonthlyMessBillBreakdownPDF = async (req, res) => {
     }
 
     const hostelName = bills[0]?.hostelId?.name || "Hostel";
+    const contacts = await resolveReportContacts({
+      hostelId: bills[0]?.hostelId?._id || bills[0]?.hostelId,
+    });
     const doc = createPdfDocument(res, `mess-bill-per-student-${month}.pdf`, {
       size: "A3",
       layout: "landscape",
@@ -383,6 +380,7 @@ const generateMonthlyMessBillBreakdownPDF = async (req, res) => {
       });
 
     renderHeader();
+    drawContactDetailsBlock(doc, contacts);
 
     drawSummaryPanel(doc, {
       title: "Register Summary",
@@ -392,7 +390,6 @@ const generateMonthlyMessBillBreakdownPDF = async (req, res) => {
         { label: "Students Covered", value: String(bills.length) },
         { label: "Days In Month", value: String(getDaysInMonth(month)) },
       ],
-      redrawHeader: renderHeader,
     });
 
     drawTable(doc, {
@@ -443,15 +440,17 @@ const generateMonthlyMessBillBreakdownPDF = async (req, res) => {
           total: breakdown.totalPayable.toFixed(2),
         };
       }),
-      redrawHeader: renderHeader,
       fontSize: 7.8,
       rowPadding: 5,
     });
 
     drawSignatureBlock(doc, {
-      leftLabel: "Prepared By Hostel Office",
-      rightLabel: "Verified By Warden / Dean",
-      redrawHeader: renderHeader,
+      signatures: [
+        { label: "Caretaker" },
+        { label: "Warden" },
+        { label: "Dean and Chairman, Hostel Supervisory Committee" },
+      ],
+      footerDate: new Date(),
     });
 
     doc.end();

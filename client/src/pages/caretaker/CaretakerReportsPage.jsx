@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { useLocation } from "react-router-dom";
 
 import { billApi } from "../../api/billApi";
+import { eblApi } from "../../api/eblApi";
 import { expenseApi } from "../../api/expenseApi";
 import { hostelExpenseApi } from "../../api/hostelExpenseApi";
 import { monthlyExpenseReportApi } from "../../api/monthlyExpenseReportApi";
@@ -83,6 +84,12 @@ export function CaretakerReportsPage() {
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
+  const eblReportsQuery = useQuery({
+    queryKey: ["caretaker-ebl-report-list"],
+    queryFn: () => eblApi.listReports(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
   const reportQuery = useQuery({
     queryKey: ["caretaker-report-full-page", month],
     queryFn: () => reportApi.getFull(month),
@@ -115,8 +122,14 @@ export function CaretakerReportsPage() {
     },
     onError: (error) => toast.error(error?.response?.data?.message || "Unable to submit report."),
   });
+  const getEblReportLabel = (row) =>
+    row.reportType === "pre_receipt" ? "EBL Pre-Receipt Report" : "EBL Month-wise Calculation Report";
+
   const submitNamedReportMutation = useMutation({
     mutationFn: async ({ reportType, month: targetMonth }) => {
+      if (reportType === "ebl_report") {
+        return eblApi.submitReport(targetMonth);
+      }
       if (reportType === "monthly_total_expenditure") {
         return monthlyExpenseReportApi.submit(targetMonth);
       }
@@ -137,6 +150,8 @@ export function CaretakerReportsPage() {
       toast.success(
         variables.reportType === "monthly_total_expenditure"
           ? "Total monthly expenditure report submitted."
+          : variables.reportType === "ebl_report"
+            ? "EBL report submitted."
           : variables.reportType === "expense_snapshot"
             ? "Expense snapshot report submitted."
             : variables.reportType === "mess_bill_per_student"
@@ -147,6 +162,7 @@ export function CaretakerReportsPage() {
       hostelExpenseQuery.refetch();
       expenseSnapshotQuery.refetch();
       messBillPerStudentQuery.refetch();
+      eblReportsQuery.refetch();
     },
     onError: (error) => toast.error(error?.response?.data?.message || "Unable to submit selected report."),
   });
@@ -190,17 +206,26 @@ export function CaretakerReportsPage() {
           },
         ]
       : [];
+  const eblReportRows = (eblReportsQuery.data?.data || []).map((row) => ({
+    ...row,
+    month: `${row.fromMonth} to ${row.toMonth}`,
+    report_name: getEblReportLabel(row),
+    report_type: "ebl_report",
+    hostelId: row.hostelId,
+    status: row.status || "draft",
+  }));
   const combinedReportRows = [
     ...monthlyTotalExpenseRows,
     ...expenseSnapshotRows,
     ...hostelExpenseReportRows,
     ...messBillPerStudentRows,
+    ...eblReportRows,
   ];
 
-  if (reportQuery.isLoading || statusQuery.isLoading || monthlyExpenseReportsQuery.isLoading || hostelExpenseQuery.isLoading || expenseSnapshotQuery.isLoading || messBillPerStudentQuery.isLoading) {
+  if (reportQuery.isLoading || statusQuery.isLoading || monthlyExpenseReportsQuery.isLoading || hostelExpenseQuery.isLoading || expenseSnapshotQuery.isLoading || messBillPerStudentQuery.isLoading || eblReportsQuery.isLoading) {
     return <LoadingState label="Loading report center..." />;
   }
-  if (reportQuery.isError || statusQuery.isError || monthlyExpenseReportsQuery.isError || hostelExpenseQuery.isError || expenseSnapshotQuery.isError || messBillPerStudentQuery.isError) {
+  if (reportQuery.isError || statusQuery.isError || monthlyExpenseReportsQuery.isError || hostelExpenseQuery.isError || expenseSnapshotQuery.isError || messBillPerStudentQuery.isError || eblReportsQuery.isError) {
     return (
       <ErrorState
         description="Unable to load report center."
@@ -211,6 +236,7 @@ export function CaretakerReportsPage() {
           hostelExpenseQuery.refetch();
           expenseSnapshotQuery.refetch();
           messBillPerStudentQuery.refetch();
+          eblReportsQuery.refetch();
         }}
       />
     );
@@ -253,6 +279,9 @@ export function CaretakerReportsPage() {
             key: "details",
             label: "Details",
             render: (row) =>
+              row.report_type === "ebl_report"
+                ? `${row.totalStudents || 0} students | Difference: ${formatCurrency(row.totalDifference)}`
+              :
               row.report_type === "monthly_total_expenditure"
                 ? `Total: ${formatCurrency(row.total_expenditure)} | Per Day: ${formatCurrency(row.mess_bill_per_day)}`
                 : row.report_type === "expense_snapshot"
@@ -273,7 +302,7 @@ export function CaretakerReportsPage() {
                 onClick={() =>
                   submitNamedReportMutation.mutate({
                     reportType: row.report_type,
-                    month: row.month,
+                    month: row.report_type === "ebl_report" ? row._id : row.month,
                   })
                 }
                 >
@@ -292,6 +321,15 @@ export function CaretakerReportsPage() {
                 onClick={() =>
                   row.report_type === "monthly_total_expenditure"
                     ? downloadReport(row.month)
+                    : row.report_type === "ebl_report"
+                      ? eblApi.downloadReportPdf(row._id).then((blob) => {
+                          const url = window.URL.createObjectURL(blob);
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = `${row.reportType}-${row.fromMonth}-to-${row.toMonth}.pdf`;
+                          link.click();
+                          window.URL.revokeObjectURL(url);
+                        })
                     : row.report_type === "expense_snapshot"
                       ? downloadExpense(row.month)
                       : row.report_type === "mess_bill_per_student"

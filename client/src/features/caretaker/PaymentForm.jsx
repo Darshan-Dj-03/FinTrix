@@ -19,7 +19,9 @@ const getStudentSortValue = (row) => {
 
 export function PaymentForm({ bills = [], onSubmit, loading }) {
   const sortedBills = useMemo(() => {
-    const unpaidBills = bills.filter((row) => row?.payment_status !== "paid");
+    const unpaidBills = bills.filter(
+      (row) => row?.payment_status !== "paid" && row?.payment_status !== "ebl" && !row?.is_ebl_student
+    );
 
     return unpaidBills.sort((a, b) => {
       const byNumericId = getStudentSortValue(a) - getStudentSortValue(b);
@@ -121,6 +123,7 @@ export function PaymentForm({ bills = [], onSubmit, loading }) {
           <label className="field-label">Student UTR</label>
           <Input
             readOnly
+            placeholder="Student UTR"
             value={selectedBill?.student_utr_number?.trim() || ""}
           />
           {isUpiWithoutUtr ? (

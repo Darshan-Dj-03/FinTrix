@@ -243,7 +243,7 @@ const sendReportNotificationEmail = async ({
         { label: "Hostel", value: hostelName || "-" },
         { label: "Included Reports", value: reportNames.length ? reportNames.join(", ") : "No PDF attachments available" },
       ],
-      outro: "Please review the attached report set. This email has been delivered to the relevant warden, dean, and admin stakeholders.",
+      outro: "Please review the attached report set. This email has been delivered only to the relevant review recipients configured in FINTRIX.",
       footerNote: "FINTRIX report packages support hostel finance review, approvals, and institutional record keeping.",
     }),
   });

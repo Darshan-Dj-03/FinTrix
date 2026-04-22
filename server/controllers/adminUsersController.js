@@ -40,6 +40,7 @@ const buildManagedUserResponse = (user, studentProfile = null) => ({
   name: user.name,
   username: user.username,
   email: user.email,
+  phoneNumber: user.phoneNumber || "",
   role: user.role,
   hostelId: user.hostelId,
   isFirstLogin: user.isFirstLogin,
@@ -81,6 +82,8 @@ const createOrUpdateStudentProfile = async ({
   gender,
   isActive,
   isTemporaryId,
+  isEBL,
+  studentClass,
 }) => {
   const normalizedStudentId = normalizeStudentId(studentId);
 
@@ -112,6 +115,9 @@ const createOrUpdateStudentProfile = async ({
     existingStudent.gender = gender;
     existingStudent.isActive = isActive;
     existingStudent.isTemporaryId = Boolean(isTemporaryId);
+    existingStudent.isEBL = Boolean(isEBL);
+    existingStudent.eblCategory = "";
+    existingStudent.studentClass = String(studentClass || "").trim();
     await existingStudent.save({ session });
     return existingStudent;
   }
@@ -124,6 +130,9 @@ const createOrUpdateStudentProfile = async ({
         gender,
         isActive,
         isTemporaryId: Boolean(isTemporaryId),
+        isEBL: Boolean(isEBL),
+        eblCategory: "",
+        studentClass: String(studentClass || "").trim(),
       },
     ],
     { session }
@@ -134,7 +143,18 @@ const createOrUpdateStudentProfile = async ({
 
 const createManagedUser = async (req, res) => {
   try {
-    const { name, email, password, role, hostelId, studentId, gender, studentIdMode } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      hostelId,
+      studentId,
+      gender,
+      studentIdMode,
+      isEBL,
+      studentClass,
+    } = req.body;
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({
@@ -213,6 +233,8 @@ const createManagedUser = async (req, res) => {
           gender,
           isActive: true,
           isTemporaryId,
+          isEBL,
+          studentClass,
         });
       }
 
@@ -260,7 +282,7 @@ const listUsers = async (req, res) => {
       .lean();
 
     const students = await Student.find({ userId: { $in: users.map((user) => user._id) } })
-      .select("userId studentId gender isEBL isActive isTemporaryId")
+      .select("userId studentId gender isEBL eblCategory studentClass isActive isTemporaryId")
       .lean();
 
     const studentMap = new Map(students.map((student) => [String(student.userId), student]));
@@ -286,7 +308,18 @@ const listUsers = async (req, res) => {
 const updateManagedUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, hostelId, isActive, studentId, gender, studentIdMode } = req.body;
+    const {
+      name,
+      email,
+      role,
+      hostelId,
+      isActive,
+      studentId,
+      gender,
+      studentIdMode,
+      isEBL,
+      studentClass,
+    } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid user id." });
@@ -387,6 +420,8 @@ const updateManagedUser = async (req, res) => {
           gender: gender ?? studentProfile?.gender,
           isActive: user.isActive,
           isTemporaryId: wantsManualId ? false : studentProfile?.isTemporaryId ?? !studentId,
+          isEBL: isEBL !== undefined ? isEBL : studentProfile?.isEBL,
+          studentClass: studentClass !== undefined ? studentClass : studentProfile?.studentClass,
         });
       } else if (studentProfile) {
         if (user.email) {

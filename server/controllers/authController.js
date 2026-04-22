@@ -14,6 +14,20 @@ const generateToken = (userId) => {
   });
 };
 
+const buildAuthUserPayload = (user, studentProfile = null) => ({
+  id: user._id,
+  name: user.name,
+  username: user.username,
+  email: user.email,
+  phoneNumber: user.phoneNumber || "",
+  role: user.role,
+  hostelId: user.hostelId,
+  isFirstLogin: user.isFirstLogin,
+  isActive: user.isActive,
+  isEBL: studentProfile ? studentProfile.isEBL : user.isEBL,
+  studentClass: studentProfile?.studentClass || "",
+});
+
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 /**
@@ -75,6 +89,7 @@ const login = async (req, res) => {
         name: user.name,
         username: user.username,
         email: user.email,
+        phoneNumber: user.phoneNumber || "",
         role: user.role,
         hostelId: user.hostelId,
         isFirstLogin: user.isFirstLogin,
@@ -150,6 +165,52 @@ const changePassword = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+
+    const user = await User.findById(req.user._id)
+      .select("-password")
+      .populate({ path: "hostelId", select: "name type location" });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    if (phoneNumber !== undefined) {
+      const sanitizedPhone = String(phoneNumber || "").trim();
+      if (sanitizedPhone.length > 25) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number must be 25 characters or less.",
+        });
+      }
+
+      user.phoneNumber = sanitizedPhone;
+      await user.save();
+    }
+
+    let studentProfile = null;
+    if (user.role === "student") {
+      studentProfile = await Student.findOne({ userId: user._id }).select(
+        "studentId gender isEBL studentClass isActive createdAt"
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      data: {
+        user: buildAuthUserPayload(user, studentProfile),
+        studentProfile,
+      },
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
 const getCurrentUser = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -170,7 +231,7 @@ const getCurrentUser = async (req, res) => {
     let studentProfile = null;
     if (user.role === "student") {
       studentProfile = await Student.findOne({ userId: user._id }).select(
-        "studentId gender isEBL isActive createdAt"
+        "studentId gender isEBL studentClass isActive createdAt"
       );
     }
 
@@ -178,20 +239,7 @@ const getCurrentUser = async (req, res) => {
       success: true,
       message: "Current user fetched successfully.",
       data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          hostelId: user.hostelId,
-          isFirstLogin: user.isFirstLogin,
-          isActive: user.isActive,
-          isEBL: studentProfile ? studentProfile.isEBL : user.isEBL,
-          eblApproved: user.eblApproved,
-          eblRequestPending: user.eblRequestPending,
-          eblRejected: user.eblRejected,
-        },
+        user: buildAuthUserPayload(user, studentProfile),
         studentProfile,
       },
     });
@@ -201,4 +249,4 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
-module.exports = { login, changePassword, getCurrentUser };
+module.exports = { login, changePassword, getCurrentUser, updateProfile };

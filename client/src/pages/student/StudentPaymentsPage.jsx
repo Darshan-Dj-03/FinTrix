@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
 import { billApi } from "../../api/billApi";
+import { eblApi } from "../../api/eblApi";
 import { paymentApi } from "../../api/paymentApi";
 import { DataTable } from "../../components/common/DataTable";
 import { ErrorState } from "../../components/common/ErrorState";
@@ -14,8 +15,22 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useAuthStore } from "../../store/authStore";
-import { CURRENT_MONTH } from "../../utils/constants";
+import { CURRENT_MONTH, parseMonthValue } from "../../utils/constants";
 import { formatCurrency, formatDate } from "../../utils/formatters";
+
+const getSortableMonthValue = (month) => {
+  const { monthIndex, year } = parseMonthValue(month);
+  return year * 12 + monthIndex;
+};
+
+const isMonthInsidePeriod = (month, fromMonth, toMonth) => {
+  const currentValue = getSortableMonthValue(month);
+  const fromValue = getSortableMonthValue(fromMonth);
+  const toValue = getSortableMonthValue(toMonth);
+  const lowerBound = Math.min(fromValue, toValue);
+  const upperBound = Math.max(fromValue, toValue);
+  return currentValue >= lowerBound && currentValue <= upperBound;
+};
 
 export function StudentPaymentsPage() {
   const studentProfile = useAuthStore((state) => state.studentProfile);
@@ -30,6 +45,11 @@ export function StudentPaymentsPage() {
   const query = useQuery({
     queryKey: ["student-payments-page", month],
     queryFn: () => paymentApi.list({ month }),
+  });
+  const eblStatusQuery = useQuery({
+    queryKey: ["student-payment-ebl-status", studentProfile?._id],
+    queryFn: eblApi.getStudentStatus,
+    enabled: Boolean(studentProfile?._id && studentProfile?.isEBL),
   });
 
   useEffect(() => {
@@ -49,20 +69,59 @@ export function StudentPaymentsPage() {
     },
   });
 
-  if (query.isLoading || billQuery.isLoading) return <LoadingState label="Loading payment history..." />;
-  if (query.isError || billQuery.isError) return <ErrorState description="Unable to load payment history." onRetry={() => {
-    query.refetch();
-    billQuery.refetch();
-  }} />;
+  if (query.isLoading || billQuery.isLoading || eblStatusQuery.isLoading) {
+    return <LoadingState label="Loading payment history..." />;
+  }
+
+  if (query.isError || billQuery.isError || eblStatusQuery.isError) {
+    return (
+      <ErrorState
+        description="Unable to load payment history."
+        onRetry={() => {
+          query.refetch();
+          billQuery.refetch();
+          eblStatusQuery.refetch();
+        }}
+      />
+    );
+  }
 
   const bill = billQuery.data?.data;
+  const matchingEblPeriod = (eblStatusQuery.data?.data?.periods || []).find((period) =>
+    isMonthInsidePeriod(month, period.fromMonth, period.toMonth)
+  );
+  const isEblBill = Boolean(
+    bill?.is_ebl_student ||
+      matchingEblPeriod ||
+      (studentProfile?.isEBL &&
+        (bill?.student_utr_number || Number(bill?.amount_paid || 0) > 0 || bill?.payment_status === "paid"))
+  );
+  const paymentRows =
+    isEblBill && Number(bill?.amount_paid || 0) > 0
+      ? [
+          {
+            _id: `ebl-${bill?._id || month}`,
+            month: bill?.month || month,
+            amount: Number(bill?.amount_paid || 0),
+            paymentMethod: "ebl",
+            paymentMadeDate: bill?.student_payment_made_date || bill?.updatedAt || null,
+            utrNumber: matchingEblPeriod?.periodUtr || bill?.student_utr_number || "-",
+            status: bill?.payment_status || "paid",
+            verifiedAt: bill?.updatedAt || null,
+          },
+        ]
+      : query.data?.data || [];
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Payments"
         title="Payment history"
-        description="Keep your payment UTR updated here so the caretaker can verify it against the bill."
+        description={
+          isEblBill
+            ? "This month is settled through the EBL workflow. Students cannot edit the UTR here because the caretaker records the reimbursement UTR for the full EBL period."
+            : "Keep your payment UTR updated here so the caretaker can verify it against the bill."
+        }
         action={
           <div className="w-full max-w-sm">
             <MonthPicker value={month} onChange={setMonth} />
@@ -70,47 +129,75 @@ export function StudentPaymentsPage() {
         }
       />
 
-      <form
-        className="panel p-6"
-        onSubmit={form.handleSubmit((values) => {
-          if (!bill?._id) {
-            toast.error("No active bill found for the selected month.");
-            return;
-          }
-
-          updateStudentPaymentInfoMutation.mutate({
-            billId: bill._id,
-            payload: { utrNumber: values.utrNumber.trim() },
-          });
-        })}
-      >
-        <h3 className="section-title">Update your UTR</h3>
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="field-label">Bill Month</label>
-            <Input readOnly value={bill?.month || month} />
-          </div>
-          <div>
-            <label className="field-label">Current Payable</label>
-            <Input readOnly value={formatCurrency((bill?.total_amount || 0) + (bill?.fine || 0))} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="field-label">UTR Number</label>
-            <Input placeholder="Enter your UTR number" {...form.register("utrNumber")} />
-            <p className="mt-2 text-xs text-slate-500">
-              Leave this blank if you have not paid by UPI yet. The caretaker will see "UTR not updated by student".
+      <div className="panel p-6">
+        {isEblBill ? (
+          <>
+            <h3 className="section-title">UTR update disabled for EBL month</h3>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="field-label">Bill month</label>
+                <Input readOnly value={bill?.month || month} />
+              </div>
+              <div>
+                <label className="field-label">Current payable</label>
+                <Input readOnly value={formatCurrency(0)} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="field-label">EBL period UTR</label>
+                <Input
+                  readOnly
+                  disabled
+                  value={matchingEblPeriod?.periodUtr || bill?.student_utr_number || "Recorded by caretaker after EBL settlement"}
+                />
+              </div>
+            </div>
+            <p className="mt-4 text-sm font-medium text-slate-500">
+              Regular student UTR update is disabled for EBL-applicable months. The caretaker records the reimbursement UTR for this period, and that value is shown above.
             </p>
-          </div>
-        </div>
-        <div className="mt-5">
-          <Button type="submit" loading={updateStudentPaymentInfoMutation.isPending}>
-            Save UTR
-          </Button>
-        </div>
-      </form>
+          </>
+        ) : (
+          <form
+            onSubmit={form.handleSubmit((values) => {
+              if (!bill?._id) {
+                toast.error("No active bill found for the selected month.");
+                return;
+              }
+
+              updateStudentPaymentInfoMutation.mutate({
+                billId: bill._id,
+                payload: { utrNumber: values.utrNumber.trim() },
+              });
+            })}
+          >
+            <h3 className="section-title">Update your UTR</h3>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="field-label">Bill month</label>
+                <Input readOnly value={bill?.month || month} />
+              </div>
+              <div>
+                <label className="field-label">Current payable</label>
+                <Input readOnly value={formatCurrency((bill?.total_amount || 0) + (bill?.fine || 0))} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="field-label">UTR number</label>
+                <Input placeholder="Enter your UTR number" {...form.register("utrNumber")} />
+                <p className="mt-2 text-xs text-slate-500">
+                  Leave this blank if you have not paid by UPI yet. The caretaker will see "UTR not updated by student".
+                </p>
+              </div>
+            </div>
+            <div className="mt-5">
+              <Button type="submit" loading={updateStudentPaymentInfoMutation.isPending}>
+                Save UTR
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
 
       <DataTable
-        rows={query.data?.data || []}
+        rows={paymentRows}
         columns={[
           { key: "month", label: "Month" },
           { key: "amount", label: "Amount", render: (row) => formatCurrency(row.amount) },
