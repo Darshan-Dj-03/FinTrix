@@ -94,10 +94,10 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 py-3 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-panel">
-        <div className="max-h-[92vh] overflow-y-auto p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/35 px-3 py-4 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:px-4 sm:py-6">
+      <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-panel sm:max-h-[92vh]">
+        <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:max-h-[92vh] sm:p-6">
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-5 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 sm:py-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-600">Profile</p>
             <h2 className="mt-2 font-display text-xl font-bold text-ink sm:text-2xl">Account details</h2>
@@ -108,7 +108,8 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+            className="shrink-0 rounded-2xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50"
+            aria-label="Close profile dialog"
           >
             <X size={18} />
           </button>

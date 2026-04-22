@@ -72,6 +72,13 @@ const OTHER_MISC_BREAKDOWN_ROWS = [
   ["bakery", "Bakery"],
 ];
 
+const renderDetailItem = (label, value) => (
+  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+    <p className="mt-2 text-sm font-semibold text-slate-700">{value}</p>
+  </div>
+);
+
 export function CaretakerHostelExpensePage() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(CURRENT_MONTH);
@@ -278,7 +285,7 @@ export function CaretakerHostelExpensePage() {
         {items.map((item, index) => (
           <div
             key={`${fieldKey}-${index}`}
-            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:grid-cols-[1fr_0.9fr_0.9fr_1.3fr_0.8fr_auto]"
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-[1fr_0.9fr_0.9fr_1.3fr_0.8fr_auto]"
           >
             <Input
               placeholder="Store name"
@@ -310,7 +317,7 @@ export function CaretakerHostelExpensePage() {
             />
             <button
               type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600"
+              className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:text-rose-600 sm:w-11"
               onClick={() => removeBillItem(fieldKey, index)}
               aria-label="Remove bill"
             >
@@ -332,6 +339,61 @@ export function CaretakerHostelExpensePage() {
 
   const renderAutoTotal = (fieldKey) => (
     <Input type="number" min="0" step="0.01" value={breakdownTotals[fieldKey] || 0} readOnly disabled />
+  );
+
+  const renderCoreDerivedValues = (key) => {
+    if (key === "keb_total") {
+      return [
+        ["Girls Split", formatCurrency(calculations.keb_girls)],
+        ["Boys Split", formatCurrency(calculations.keb_boys)],
+        ["Per Girl", formatCurrency(calculations.keb_per_girl)],
+        ["Per Boy", formatCurrency(calculations.keb_per_boy)],
+      ];
+    }
+
+    if (key === "labour_bill") {
+      return [["Per Student", formatCurrency(calculations.labour_per_student)]];
+    }
+
+    if (key === "labour_night_watch") {
+      return [
+        ["Girls Split", formatCurrency(calculations.labour_night_watch)],
+        ["Per Girl", formatCurrency(calculations.labour_night_watch_per_girl)],
+      ];
+    }
+
+    return [];
+  };
+
+  const renderMiscDerivedValues = (key) => {
+    if (key === "banana" || key === "bakery") {
+      return [["Per Student", formatCurrency(calculations.misc_per_student)]];
+    }
+
+    return [];
+  };
+
+  const renderProteinDerivedValues = (countKey, perThreeKey, perUnitKey, countLabel) => [
+    [countLabel, proteinStudentCounts[countKey] || 0],
+    ["Price Per 3 Units", formatCurrency(calculations[perThreeKey])],
+    ["Price Per Unit", formatCurrency(calculations[perUnitKey])],
+  ];
+
+  const renderMobileRowCard = (label, fieldKey, detailRows = []) => (
+    <div key={fieldKey} className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-base font-semibold text-ink">{label}</p>
+          <p className="text-sm text-slate-500">Auto Total</p>
+          <p className="text-xl font-display font-bold text-ink">{formatCurrency(breakdownTotals[fieldKey] || 0)}</p>
+        </div>
+        {detailRows.length ? <div className="grid gap-3 sm:grid-cols-2">{detailRows.map(([itemLabel, value]) => renderDetailItem(itemLabel, value))}</div> : null}
+        <div>
+          <p className="mb-3 text-sm font-semibold text-slate-600">Bill Entries</p>
+          {renderBillEntries(fieldKey)}
+        </div>
+      </div>
+    </div>
   );
 
   const onSubmit = () => {
@@ -409,7 +471,10 @@ export function CaretakerHostelExpensePage() {
               Table-style entry with live gender and per-student splits. Night watch for girls is calculated as labour per student plus night watch divided by total girls.
             </p> */}
           </div>
-          <div className="overflow-x-auto">
+          <div className="space-y-4 p-4 md:hidden">
+            {CORE_ROWS.map(([key, label]) => renderMobileRowCard(label, key, renderCoreDerivedValues(key)))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
@@ -458,7 +523,10 @@ export function CaretakerHostelExpensePage() {
             <h2 className="section-title">Section 2: Misc Expenses</h2>
             {/* <p className="mt-2 text-sm text-slate-500">Banana and bakery are combined for the current per-student misc split.</p> */}
           </div>
-          <div className="overflow-x-auto">
+          <div className="space-y-4 p-4 md:hidden">
+            {MISC_ROWS.map(([key, label]) => renderMobileRowCard(label, key, renderMiscDerivedValues(key)))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
@@ -489,7 +557,12 @@ export function CaretakerHostelExpensePage() {
             <h2 className="section-title">Section 3: Protein Expense Logic</h2>
             {/* <p className="mt-2 text-sm text-slate-500">Each total is converted into a per-student 3-unit price, then a per-unit price.</p> */}
           </div>
-          <div className="overflow-x-auto">
+          <div className="space-y-4 p-4 md:hidden">
+            {PROTEIN_ROWS.map(([inputKey, label, countKey, perThreeKey, perUnitKey, countLabel]) =>
+              renderMobileRowCard(label, inputKey, renderProteinDerivedValues(countKey, perThreeKey, perUnitKey, countLabel))
+            )}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
@@ -540,7 +613,7 @@ export function CaretakerHostelExpensePage() {
             </div>
           </div>
 
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button type="submit" loading={mutation.isPending}>
               {currentRecord ? "Update hostel expense" : "Save hostel expense"}
             </Button>
@@ -560,7 +633,7 @@ export function CaretakerHostelExpensePage() {
       </form>
 
       <div className="panel space-y-5 p-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="section-title">Monthly Expenditure Report</h2>
             {/* <p className="mt-2 text-sm text-slate-500">
@@ -569,6 +642,7 @@ export function CaretakerHostelExpensePage() {
           </div>
           <Button
             type="button"
+            className="w-full sm:w-auto"
             onClick={() =>
               reportMutation.mutate({
                 opening_balance: Number(reportInputs.opening_balance || 0),

@@ -28,12 +28,12 @@ export function Sidebar() {
 
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-white/60 bg-white/92 backdrop-blur transition-[transform,width] duration-300 ease-out xl:static xl:z-auto xl:flex",
+          "fixed inset-y-0 left-0 z-40 flex h-[100dvh] max-h-[100dvh] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden border-r border-white/60 bg-white/92 backdrop-blur transition-[transform,width] duration-300 ease-out xl:static xl:z-auto xl:flex xl:w-72",
           sidebarOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0",
           sidebarOpen ? "xl:w-72" : "xl:w-24"
         )}
       >
-        <div className="flex items-center justify-between px-6 py-6">
+        <div className="shrink-0 flex items-center justify-between px-6 py-6">
           <div
             className={clsx(
               "overflow-hidden transition-[max-width,opacity] duration-250 ease-out",
@@ -57,7 +57,7 @@ export function Sidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-2 px-4 py-6">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-6">
           {items.map((item) => (
             <NavLink
               key={item.to}
@@ -90,7 +90,7 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="border-t border-slate-200 p-4">
+        <div className="shrink-0 border-t border-slate-200 p-4">
           <button
             type="button"
             className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-slate-900"
