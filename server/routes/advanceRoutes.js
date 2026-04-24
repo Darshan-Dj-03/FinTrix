@@ -25,6 +25,7 @@ router.post(
     body("takenAmount").isFloat({ min: 0 }).withMessage("takenAmount must be non-negative"),
     body("closedAmount").optional().isFloat({ min: 0 }).withMessage("closedAmount must be non-negative"),
     body("billDates").optional().isArray().withMessage("billDates must be an array"),
+    body("settlements").optional().isArray().withMessage("settlements must be an array"),
   ],
   validateRequest,
   addAdvance

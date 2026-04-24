@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -8,10 +9,11 @@ import { useAuthStore } from "../../store/authStore";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 
-export function LoginForm() {
+export function LoginForm({ onForgotPassword, onStudentSignup }) {
   const navigate = useNavigate();
   const location = useLocation();
   const setSession = useAuthStore((state) => state.setSession);
+  const [loginError, setLoginError] = useState("");
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
       identifier: "",
@@ -26,6 +28,7 @@ export function LoginForm() {
         password: values.password,
       }),
     onSuccess: async (response) => {
+      setLoginError("");
       setSession({
         token: response.token,
         refreshToken: response.refreshToken,
@@ -54,12 +57,17 @@ export function LoginForm() {
       navigate(location.state?.from?.pathname || "/workspace", { replace: true });
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || "Unable to sign in.");
+      const message = error?.response?.data?.message || "Unable to sign in.";
+      setLoginError(message);
+      toast.error(message);
     },
   });
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit((values) => mutation.mutate(values))}>
+    <form className="space-y-6" onSubmit={handleSubmit((values) => {
+      setLoginError("");
+      mutation.mutate(values);
+    })}>
       <div>
         <label className="field-label">Email or Student ID</label>
         <Input
@@ -79,9 +87,34 @@ export function LoginForm() {
         {errors.password ? <p className="mt-2 text-sm text-rose-500">{errors.password.message}</p> : null}
       </div>
 
-      <Button className="w-full" size="lg" loading={mutation.isPending} type="submit">
+      <Button className="w-full rounded-[1.35rem] shadow-[0_16px_30px_rgba(15,23,42,0.12)]" size="lg" loading={mutation.isPending} type="submit">
         Sign in
       </Button>
+
+      {loginError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>{loginError}</p>
+          {loginError.toLowerCase().includes("sign up") || loginError.toLowerCase().includes("account not found") ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center font-semibold text-brand-700 transition hover:text-brand-800"
+              onClick={onStudentSignup}
+            >
+              Open student signup
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-start gap-3 pt-1 text-sm">
+        <button
+          type="button"
+          className="font-medium text-brand-700 transition hover:text-brand-800"
+          onClick={onForgotPassword}
+        >
+          Forgot password?
+        </button>
+      </div>
     </form>
   );
 }

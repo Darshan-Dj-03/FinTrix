@@ -9,7 +9,6 @@ const Expense = require("../models/Expense");
 const HostelExpense = require("../models/HostelExpense");
 const MessBill = require("../models/MessBill");
 const MessBillReport = require("../models/MessBillReport");
-const Ledger = require("../models/Ledger");
 const Payment = require("../models/Payment");
 const Charge = require("../models/Charge");
 const GuestCharge = require("../models/GuestCharge");
@@ -20,6 +19,7 @@ const AuditLog = require("../models/AuditLog");
 const EblPeriod = require("../models/EblPeriod");
 const EblReport = require("../models/EblCategoryReport");
 const { calculateDynamicFine, roundUpCurrency } = require("../services/billLifecycleService");
+const { generateMessBills } = require("../services/calculationService");
 
 const signToken = (user) => jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
@@ -74,7 +74,7 @@ const createBaseData = async () => {
 };
 
 describe("Final backend hardening", () => {
-  test("records idempotent payments and syncs the ledger", async () => {
+  test("records idempotent payments without creating duplicates", async () => {
     const { hostel, caretaker, studentUser, student } = await createBaseData();
 
     const bill = await MessBill.create({
@@ -102,18 +102,6 @@ describe("Final backend hardening", () => {
       amount_paid: 0,
     });
 
-    await Ledger.create({
-      month: "Jan-2026",
-      hostelId: hostel._id,
-      openingBalance: 0,
-      totalExpenses: 500,
-      totalBilled: 1000,
-      totalCollected: 0,
-      closingBalance: -500,
-      outstanding: 1000,
-      preparedBy: caretaker._id,
-    });
-
     const token = signToken(caretaker);
 
     const firstResponse = await request(app)
@@ -135,7 +123,6 @@ describe("Final backend hardening", () => {
     expect(String(secondResponse.body.data._id)).toBe(String(firstResponse.body.data._id));
 
     const updatedBill = await MessBill.findById(bill._id);
-    const updatedLedger = await Ledger.findOne({ hostelId: hostel._id, month: "Jan-2026" });
     const payments = await Payment.find({ billId: bill._id });
     const auditLogs = await AuditLog.find({ entityType: "Payment" });
     const expectedFine = calculateDynamicFine(new Date("2026-01-20T00:00:00.000Z"));
@@ -143,8 +130,6 @@ describe("Final backend hardening", () => {
 
     expect(updatedBill.payment_status).toBe("paid");
     expect(updatedBill.amount_paid).toBe(expectedAmountPaid);
-    expect(updatedLedger.totalCollected).toBe(expectedAmountPaid);
-    expect(updatedLedger.outstanding).toBe(0);
     expect(payments).toHaveLength(1);
     expect(auditLogs).toHaveLength(1);
   });
@@ -177,18 +162,6 @@ describe("Final backend hardening", () => {
       amount_paid: 0,
     });
 
-    await Ledger.create({
-      month: "Apr-2026",
-      hostelId: hostel._id,
-      openingBalance: 0,
-      totalExpenses: 0,
-      totalBilled: 2200,
-      totalCollected: 0,
-      closingBalance: 0,
-      outstanding: 2200,
-      preparedBy: caretaker._id,
-    });
-
     const token = signToken(caretaker);
 
     const firstResponse = await request(app)
@@ -204,13 +177,56 @@ describe("Final backend hardening", () => {
       .send({ billId: bill._id.toString(), paymentMethod: "upi" });
 
     const payments = await Payment.find({ billId: bill._id });
-    const updatedLedger = await Ledger.findOne({ hostelId: hostel._id, month: "Apr-2026" });
+    const updatedBill = await MessBill.findById(bill._id);
+    const expectedFine = calculateDynamicFine(new Date("2026-04-20T00:00:00.000Z"));
+    const expectedAmountPaid = roundUpCurrency(2200 + expectedFine);
 
     expect(firstResponse.status).toBe(201);
     expect(secondResponse.status).toBe(200);
     expect(String(secondResponse.body.data._id)).toBe(String(firstResponse.body.data._id));
     expect(payments).toHaveLength(1);
-    expect(updatedLedger.totalCollected).toBe(2200);
+    expect(updatedBill.amount_paid).toBe(expectedAmountPaid);
+  });
+
+  test("applies the revised absence deduction policy to mess bills", async () => {
+    const month = "Jan-2026";
+    const expense = {
+      month,
+      hostelId: "hostel-1",
+      mess_bill_per_day: 100,
+      mess_bill_total: 3100,
+      egg_price: 0,
+      chicken_price: 0,
+      paneer_price: 0,
+      labour_total: 0,
+      night_watch_total: 0,
+      bakery_total: 0,
+      banana_total: 0,
+      banana_bakery_total: 0,
+      keb_girls: 0,
+      keb_boys: 0,
+    };
+    const students = [
+      { _id: "student-1", userId: { _id: "user-1" }, gender: "male", isActive: true, isEBL: false },
+      { _id: "student-2", userId: { _id: "user-2" }, gender: "male", isActive: true, isEBL: false },
+      { _id: "student-3", userId: { _id: "user-3" }, gender: "male", isActive: true, isEBL: false },
+    ];
+    const consumptionRecords = [
+      { studentId: "student-1", absent_days: 4 },
+      { studentId: "student-2", absent_days: 5 },
+      { studentId: "student-3", absent_days: 10 },
+    ];
+
+    const bills = generateMessBills(expense, students, consumptionRecords);
+
+    expect(bills[0].base_mess).toBe(3100);
+    expect(bills[0].billable_days).toBe(31);
+
+    expect(bills[1].base_mess).toBe(3050);
+    expect(bills[1].billable_days).toBe(31);
+
+    expect(bills[2].base_mess).toBe(2100);
+    expect(bills[2].billable_days).toBe(21);
   });
 
   test("generates, submits, and approves report snapshots", async () => {
@@ -551,97 +567,44 @@ describe("Final backend hardening", () => {
     expect(response.body.data.total_payable).toBe(2254);
   });
 
-  test("creates ledger from expenses, charges, and payments", async () => {
-    const { hostel, admin, caretaker, studentUser, student } = await createBaseData();
-
-    await Ledger.create({
-      month: "Feb-2026",
-      hostelId: hostel._id,
-      openingBalance: 0,
-      totalExpenses: 500,
-      totalBilled: 500,
-      totalCollected: 400,
-      closingBalance: -100,
-      outstanding: 100,
-      preparedBy: admin._id,
-    });
-
-    await Expense.create({
-      month: "Mar-2026",
-      hostelId: hostel._id,
-      elp: 100,
-      cylinder: 100,
-      oil: 100,
-      kirana: 100,
-      milk: 100,
-      keb_total: 100,
-      keb_girls: 0,
-      keb_boys: 100,
-      total_worker_days: 60,
-      labour_total: 200,
-      night_watch_total: 0,
-      bakery_total: 50,
-      banana_total: 50,
-      egg_price: 0,
-      chicken_price: 0,
-      paneer_price: 0,
-      createdBy: caretaker._id,
-    });
-
-    await Charge.create({
-      title: "Gas Adjustment",
-      amount: 50,
-      month: "Mar-2026",
-      hostelId: hostel._id,
-      addedBy: caretaker._id,
-    });
+  test("lets students save payment date and lets caretakers update it when needed", async () => {
+    const { hostel, caretaker, studentUser, student } = await createBaseData();
 
     const bill = await MessBill.create({
       studentId: student._id,
       userId: studentUser._id,
       hostelId: hostel._id,
-      month: "Mar-2026",
-      base_mess: 600,
-      keb_charge: 100,
-      labour_charge: 100,
-      night_watch_charge: 0,
-      bakery_charge: 50,
-      additional_charge: 50,
-      egg_count: 0,
-      egg_total: 0,
-      chicken_count: 0,
-      chicken_total: 0,
-      paneer_count: 0,
-      paneer_total: 0,
-      total_amount: 900,
-      fine: 0,
-      due_date: new Date("2026-03-20T00:00:00.000Z"),
-      payment_status: "paid",
-      amount_paid: 900,
+      month: "Apr-2026",
+      base_mess: 1200,
+      total_amount: 1200,
+      due_date: new Date("2026-04-20T00:00:00.000Z"),
+      payment_status: "pending",
+      amount_paid: 0,
     });
 
-    await Payment.create({
-      studentId: student._id,
-      billId: bill._id,
-      hostelId: hostel._id,
-      month: "Mar-2026",
-      amount: 900,
-      paymentMethod: "upi",
-      utrNumber: "UTR0002",
-      status: "paid",
-      verifiedBy: caretaker._id,
-    });
+    const studentUpdateResponse = await request(app)
+      .put(`/bill/payment-info/${bill._id}`)
+      .set("Authorization", `Bearer ${signToken(studentUser)}`)
+      .send({
+        utrNumber: "UTR-DATE-001",
+        paymentMadeDate: "2026-04-18",
+      });
 
-    const response = await request(app)
-      .post("/ledger/create/Mar-2026")
-      .set("Authorization", `Bearer ${signToken(admin)}`)
-      .send({ hostelId: hostel._id.toString() });
+    expect(studentUpdateResponse.status).toBe(200);
+    expect(studentUpdateResponse.body.data.student_utr_number).toBe("UTR-DATE-001");
+    expect(new Date(studentUpdateResponse.body.data.student_payment_made_date).toISOString()).toBe("2026-04-18T00:00:00.000Z");
 
-    expect(response.status).toBe(201);
-    expect(response.body.data.openingBalance).toBe(-100);
-    expect(response.body.data.totalBilled).toBe(900);
-    expect(response.body.data.totalCollected).toBe(900);
-    expect(response.body.data.outstanding).toBe(0);
+    const caretakerUpdateResponse = await request(app)
+      .put(`/bill/payment-info/${bill._id}`)
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        utrNumber: "UTR-DATE-002",
+        paymentMadeDate: "2026-04-19",
+      });
+
+    expect(caretakerUpdateResponse.status).toBe(200);
+    expect(caretakerUpdateResponse.body.data.student_utr_number).toBe("UTR-DATE-002");
+    expect(new Date(caretakerUpdateResponse.body.data.student_payment_made_date).toISOString()).toBe("2026-04-19T00:00:00.000Z");
   });
 
   test("creates EBL periods and moves report-based approvals through submit and warden approval while blocking normal payment handling", async () => {
@@ -649,7 +612,6 @@ describe("Final backend hardening", () => {
 
     student.isEBL = true;
     student.eblCategory = "SC";
-    student.studentClass = "IV year (B.Tech.)";
     await student.save();
 
     const [augBill, sepBill] = await MessBill.create([
@@ -683,9 +645,16 @@ describe("Final backend hardening", () => {
       },
     ]);
 
+    const paymentBlockedBeforeClaimResponse = await request(app)
+      .post("/payment")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({ billId: augBill._id.toString(), paymentMethod: "cash" });
+    expect(paymentBlockedBeforeClaimResponse.status).toBe(400);
+    expect(paymentBlockedBeforeClaimResponse.body.message).toMatch(/claim details must be submitted first/i);
+
     const createResponse = await request(app)
       .post("/ebl/periods")
-      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .set("Authorization", `Bearer ${signToken(studentUser)}`)
       .send({
         studentId: student._id.toString(),
         fromMonth: "Aug-2024",
@@ -698,19 +667,88 @@ describe("Final backend hardening", () => {
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.data.monthlyDetails).toHaveLength(2);
     expect(createResponse.body.data.monthlyDetails[0].goiAmount).toBe(720);
+    expect(createResponse.body.data.monthlyDetails[0].claimedAmount).toBe(0);
     expect(createResponse.body.data.monthlyDetails[0].differenceAmount).toBe(2209);
     expect(createResponse.body.data.monthlyDetails[1].goiAmount).toBe(720);
+    expect(createResponse.body.data.monthlyDetails[1].claimedAmount).toBe(0);
     expect(createResponse.body.data.monthlyDetails[1].differenceAmount).toBe(380);
     expect(createResponse.body.data.totals.totalMessBill).toBe(4029);
     expect(createResponse.body.data.totals.totalScholarship).toBe(1440);
+    expect(createResponse.body.data.totals.totalClaimedAmount).toBe(0);
     expect(createResponse.body.data.totals.totalDifference).toBe(2589);
+    expect(createResponse.body.data.totals.totalRemainingBalance).toBe(2589);
     expect(createResponse.body.data.totals.totalClaimAmount).toBe(2589);
     expect(createResponse.body.data.periodUtr).toBe("EBL-UTR-0001");
 
     const periodId = createResponse.body.data._id;
     const refreshedAugBill = await MessBill.findById(augBill._id);
-    expect(refreshedAugBill.payment_status).toBe("paid");
-    expect(refreshedAugBill.student_utr_number).toBe("EBL-UTR-0001");
+    expect(refreshedAugBill.payment_status).toBe("partial_scholarship_received");
+    expect(refreshedAugBill.ebl_claimed_amount).toBe(0);
+    expect(refreshedAugBill.ebl_difference_amount).toBe(2209);
+    expect(refreshedAugBill.ebl_remaining_balance).toBe(2209);
+
+    const verifyResponse = await request(app)
+      .put(`/ebl/periods/${periodId}/verify`)
+      .set("Authorization", `Bearer ${signToken(caretaker)}`);
+    expect(verifyResponse.status).toBe(200);
+    expect(verifyResponse.body.data.status).toBe("verified");
+
+    const studentEditBlockedResponse = await request(app)
+      .put(`/ebl/periods/${periodId}`)
+      .set("Authorization", `Bearer ${signToken(studentUser)}`)
+      .send({
+        monthlyGoiAmount: 1500,
+      });
+    expect(studentEditBlockedResponse.status).toBe(400);
+    expect(studentEditBlockedResponse.body.message).toMatch(/can no longer be edited/i);
+
+    const updateResponse = await request(app)
+      .put(`/ebl/periods/${periodId}`)
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        universityClaimAmount: 2000,
+        periodUtr: "UNI-CLAIM-0001",
+      });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.totals.totalClaimedAmount).toBe(2000);
+    expect(updateResponse.body.data.totals.totalDifference).toBe(2589);
+    expect(updateResponse.body.data.totals.totalRemainingBalance).toBe(589);
+
+    const updatedAugDetail = updateResponse.body.data.monthlyDetails.find((item) => item.month === "Aug-2024");
+    const updatedSepDetail = updateResponse.body.data.monthlyDetails.find((item) => item.month === "Sep-2024");
+
+    const eblPaymentResponse = await request(app)
+      .post("/payment")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        billId: augBill._id.toString(),
+        paymentMethod: "cash",
+        paymentMadeDate: "2024-09-05",
+      });
+
+    expect(eblPaymentResponse.status).toBe(201);
+
+    const settledAugBill = await MessBill.findById(augBill._id);
+    expect(settledAugBill.payment_status).toBe("paid");
+    expect(settledAugBill.ebl_student_paid_amount).toBe(roundUpCurrency(updatedAugDetail.remainingBalance));
+    expect(settledAugBill.ebl_remaining_balance).toBe(0);
+
+    const secondEblPaymentResponse = await request(app)
+      .post("/payment")
+      .set("Authorization", `Bearer ${signToken(caretaker)}`)
+      .send({
+        billId: sepBill._id.toString(),
+        paymentMethod: "cash",
+        paymentMadeDate: "2024-09-05",
+      });
+
+    expect(secondEblPaymentResponse.status).toBe(201);
+
+    const settledSepBill = await MessBill.findById(sepBill._id);
+    expect(settledSepBill.payment_status).toBe("paid");
+    expect(settledSepBill.ebl_student_paid_amount).toBe(roundUpCurrency(updatedSepDetail.remainingBalance));
+    expect(settledSepBill.ebl_remaining_balance).toBe(0);
 
     const reportGenerateResponse = await request(app)
       .post("/ebl/reports")
@@ -747,20 +785,23 @@ describe("Final backend hardening", () => {
       .post("/payment")
       .set("Authorization", `Bearer ${signToken(caretaker)}`)
       .send({ billId: augBill._id.toString(), paymentMethod: "cash" });
-    expect(paymentBlockedResponse.status).toBe(400);
-    expect(paymentBlockedResponse.body.message).toMatch(/EBL reimbursement bills cannot be recorded/i);
+    expect(paymentBlockedResponse.status).toBe(200);
+    expect(paymentBlockedResponse.body.message).toMatch(/already fully paid/i);
 
     const savedPeriod = await EblPeriod.findById(periodId);
     const savedReport = await EblReport.findById(reportId);
     const eblAuditLogs = await AuditLog.find({
       entityType: "EblPeriod",
-      action: { $in: ["EBL_PERIOD_CREATED"] },
+      action: { $in: ["EBL_PERIOD_CREATED", "EBL_PERIOD_VERIFIED"] },
     });
 
-    expect(savedPeriod.status).toBe("draft");
+    expect(savedPeriod.status).toBe("verified");
+    expect(savedPeriod.verifiedBy).toBeTruthy();
+    expect(savedPeriod.verifiedAt).toBeTruthy();
+    expect(savedPeriod.universityClaimAmount).toBe(2000);
     expect(savedReport.status).toBe("warden_approved");
     expect(String(savedPeriod.monthlyDetails[0].billId)).toBe(String(augBill._id));
     expect(String(savedPeriod.monthlyDetails[1].billId)).toBe(String(sepBill._id));
-    expect(eblAuditLogs).toHaveLength(1);
+    expect(eblAuditLogs).toHaveLength(2);
   });
 });

@@ -2,6 +2,10 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
 const Student = require("../models/Student");
+const StudentSignupRequest = require("../models/StudentSignupRequest");
+const PasswordResetOtp = require("../models/PasswordResetOtp");
+const { runInTransaction } = require("../utils/transaction");
+const { sendEmail, buildEmailShell } = require("../utils/mailerService");
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -23,9 +27,128 @@ const generateRefreshToken = (userId) =>
   });
 
 const hashToken = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
+const normalizeEmail = (email = "") => String(email || "").trim().toLowerCase();
+const normalizeStudentId = (studentId = "") => String(studentId || "").trim().toUpperCase();
+const generateOtp = () => `${Math.floor(100000 + Math.random() * 900000)}`;
+const OTP_VALIDITY_MINUTES = 10;
+
+const issueOtpForUser = async ({
+  user,
+  email,
+  subject,
+  title,
+  preheader,
+  intro,
+  footerNote,
+}) => {
+  const otp = generateOtp();
+  const expiresAt = new Date(Date.now() + OTP_VALIDITY_MINUTES * 60 * 1000);
+
+  await PasswordResetOtp.updateMany(
+    { email, usedAt: null },
+    { $set: { usedAt: new Date() } }
+  );
+
+  await PasswordResetOtp.create({
+    userId: user._id,
+    email,
+    otpHash: hashToken(otp),
+    expiresAt,
+  });
+
+  await sendEmail({
+    to: email,
+    subject,
+    html: buildEmailShell({
+      title,
+      preheader,
+      greeting: `Dear ${user.name || "User"},`,
+      intro,
+      highlight: `OTP: ${otp}`,
+      rows: [
+        { label: "Email", value: email },
+        { label: "Validity", value: `${OTP_VALIDITY_MINUTES} minutes` },
+      ],
+      outro: "If you did not request this action, you can safely ignore this email.",
+      footerNote,
+    }),
+  });
+};
+
+const validateOtpAndLoadUser = async ({ email, otp }) => {
+  const resetRecord = await PasswordResetOtp.findOne({
+    email,
+    usedAt: null,
+  }).sort({ createdAt: -1 });
+
+  if (!resetRecord || resetRecord.expiresAt.getTime() < Date.now() || resetRecord.otpHash !== hashToken(otp)) {
+    return { error: "Invalid or expired OTP." };
+  }
+
+  const user = await User.findById(resetRecord.userId).select("+refreshTokenHash +password");
+  if (!user || user.isActive === false || (user.role === "student" && (user.approvalStatus || "approved") !== "approved")) {
+    return { error: "Password reset is available only for approved active accounts." };
+  }
+
+  return { user, resetRecord };
+};
+
+const getStudentApprovalMessage = (user) => {
+  const approvalStatus = user?.approvalStatus || "approved";
+
+  if (approvalStatus === "pending_caretaker") {
+    return "Your signup request is waiting for caretaker review.";
+  }
+
+  if (approvalStatus === "pending_admin") {
+    return "Your signup request is waiting for admin approval.";
+  }
+
+  if (approvalStatus === "rejected") {
+    return "Your signup request was rejected. Please contact the hostel office.";
+  }
+
+  return "This student account is not yet approved.";
+};
+
+const ensureApprovedStudentAccess = (user) => {
+  if (user?.role === "student" && (user.approvalStatus || "approved") !== "approved") {
+    return getStudentApprovalMessage(user);
+  }
+
+  if (user?.isActive === false) {
+    return "This account is inactive. Please contact an administrator.";
+  }
+
+  return null;
+};
+
+const generateTemporaryStudentId = async (session) => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const candidate = `TEMP-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0")}`;
+    const normalizedCandidate = normalizeStudentId(candidate);
+    const usernameCandidate = normalizedCandidate.toLowerCase();
+
+    const [studentConflict, userConflict, pendingConflict] = await Promise.all([
+      Student.findOne({ studentId: normalizedCandidate }).session(session),
+      User.findOne({ username: usernameCandidate }).session(session),
+      StudentSignupRequest.findOne({ studentId: normalizedCandidate }).session(session),
+    ]);
+
+    if (!studentConflict && !userConflict && !pendingConflict) {
+      return normalizedCandidate;
+    }
+  }
+
+  const error = new Error("Unable to generate a unique temporary student ID. Please try again.");
+  error.status = 500;
+  throw error;
+};
 
 const loadStudentProfile = async (userId) =>
-  Student.findOne({ userId }).select("studentId gender isEBL studentClass isActive createdAt");
+  Student.findOne({ userId }).select("studentId gender isEBL isActive createdAt");
 
 const buildAuthResponse = async (user, { accessToken, refreshToken }) => {
   const studentProfile = user.role === "student" ? await loadStudentProfile(user._id) : null;
@@ -48,8 +171,8 @@ const buildAuthUserPayload = (user, studentProfile = null) => ({
   hostelId: user.hostelId,
   isFirstLogin: user.isFirstLogin,
   isActive: user.isActive,
+  approvalStatus: user.approvalStatus || "approved",
   isEBL: studentProfile ? studentProfile.isEBL : user.isEBL,
-  studentClass: studentProfile?.studentClass || "",
 });
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
@@ -78,17 +201,17 @@ const login = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      // Use a generic message to avoid username enumeration
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials.",
+        message: "Account not found. If you are a new student, please sign up first.",
       });
     }
 
-    if (user.isActive === false) {
+    const accessError = ensureApprovedStudentAccess(user);
+    if (accessError) {
       return res.status(403).json({
         success: false,
-        message: "This account is inactive. Please contact an administrator.",
+        message: accessError,
       });
     }
 
@@ -182,6 +305,99 @@ const changePassword = async (req, res) => {
   }
 };
 
+const requestProfilePasswordOtp = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("name email role isActive approvalStatus");
+
+    if (!user || user.isActive === false) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const accessError = ensureApprovedStudentAccess(user);
+    if (accessError) {
+      return res.status(403).json({ success: false, message: accessError });
+    }
+
+    const normalizedEmail = normalizeEmail(user.email);
+    await issueOtpForUser({
+      user,
+      email: normalizedEmail,
+      subject: "FINTRIX profile password change OTP",
+      title: "Profile Password Change OTP",
+      preheader: "Use this OTP to change your FINTRIX password from your profile.",
+      intro: "A profile password change request was received for your FINTRIX account. Use the OTP below to continue securely.",
+      footerNote: "Profile password change OTPs are generated securely by FINTRIX.",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "An OTP has been sent to your registered email address.",
+      data: {
+        email: normalizedEmail,
+      },
+    });
+  } catch (error) {
+    console.error("Request profile password OTP error:", error);
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+const changePasswordWithOtp = async (req, res) => {
+  try {
+    const otp = String(req.body.otp || "").trim();
+    const newPassword = String(req.body.newPassword || "");
+
+    if (!otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "otp and newPassword are required.",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 8 characters.",
+      });
+    }
+
+    const currentUser = await User.findById(req.user._id).select("email");
+    if (!currentUser) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const normalizedEmail = normalizeEmail(currentUser.email);
+    const { user, resetRecord, error } = await validateOtpAndLoadUser({
+      email: normalizedEmail,
+      otp,
+    });
+
+    if (error) {
+      return res.status(400).json({ success: false, message: error });
+    }
+
+    if (String(user._id) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: "OTP does not belong to the current account." });
+    }
+
+    user.password = newPassword;
+    user.isFirstLogin = false;
+    user.refreshTokenHash = null;
+    await user.save();
+
+    resetRecord.usedAt = new Date();
+    await resetRecord.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully.",
+    });
+  } catch (error) {
+    console.error("Change password with OTP error:", error);
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
 const refreshSession = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -203,10 +419,11 @@ const refreshSession = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found." });
     }
 
-    if (user.isActive === false) {
+    const accessError = ensureApprovedStudentAccess(user);
+    if (accessError) {
       return res.status(401).json({
         success: false,
-        message: "This account is inactive. Please contact an administrator.",
+        message: accessError,
       });
     }
 
@@ -267,7 +484,7 @@ const updateProfile = async (req, res) => {
     let studentProfile = null;
     if (user.role === "student") {
       studentProfile = await Student.findOne({ userId: user._id }).select(
-        "studentId gender isEBL studentClass isActive createdAt"
+        "studentId gender isEBL isActive createdAt"
       );
     }
 
@@ -295,17 +512,18 @@ const getCurrentUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found." });
     }
 
-    if (user.isActive === false) {
+    const accessError = ensureApprovedStudentAccess(user);
+    if (accessError) {
       return res.status(403).json({
         success: false,
-        message: "This account is inactive. Please contact an administrator.",
+        message: accessError,
       });
     }
 
     let studentProfile = null;
     if (user.role === "student") {
       studentProfile = await Student.findOne({ userId: user._id }).select(
-        "studentId gender isEBL studentClass isActive createdAt"
+        "studentId gender isEBL isActive createdAt"
       );
     }
 
@@ -323,4 +541,224 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
-module.exports = { login, refreshSession, changePassword, getCurrentUser, updateProfile };
+const signupStudent = async (req, res) => {
+  try {
+    const { name, email, password, gender, studentIdMode, studentId } = req.body;
+
+    if (!name || !email || !password || !gender) {
+      return res.status(400).json({
+        success: false,
+        message: "name, email, password, and gender are required.",
+      });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters.",
+      });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    const payload = await runInTransaction(async (session) => {
+      const wantsManualId = String(studentIdMode || "").toLowerCase() === "manual";
+      const resolvedStudentId = wantsManualId
+        ? normalizeStudentId(studentId)
+        : await generateTemporaryStudentId(session);
+      const username = resolvedStudentId.toLowerCase();
+
+      if (wantsManualId && !resolvedStudentId) {
+        const error = new Error("studentId is required when entering an existing ID.");
+        error.status = 400;
+        throw error;
+      }
+
+      const [existingUser, existingStudent, existingRequest] = await Promise.all([
+        User.findOne({
+          $or: [{ email: normalizedEmail }, { username }],
+        }).session(session),
+        Student.findOne({ studentId: resolvedStudentId }).session(session),
+        StudentSignupRequest.findOne({ studentId: resolvedStudentId }).session(session),
+      ]);
+
+      if (existingUser || existingStudent) {
+        const error = new Error("A user with this email or student ID already exists.");
+        error.status = 409;
+        throw error;
+      }
+
+      if (existingRequest) {
+        const error = new Error("A signup request already exists for this email or student ID.");
+        error.status = 409;
+        throw error;
+      }
+
+      const [user] = await User.create(
+        [
+          {
+            name: String(name || "").trim(),
+            username,
+            email: normalizedEmail,
+            phoneNumber: "",
+            password,
+            role: "student",
+            hostelId: null,
+            isFirstLogin: false,
+            isActive: false,
+            approvalStatus: "pending_caretaker",
+          },
+        ],
+        { session }
+      );
+
+      const [request] = await StudentSignupRequest.create(
+        [
+          {
+            userId: user._id,
+            studentId: resolvedStudentId,
+            isTemporaryId: !wantsManualId,
+            gender,
+            status: "pending_caretaker",
+          },
+        ],
+        { session }
+      );
+
+      return { user, request };
+    });
+
+    await sendEmail({
+      to: normalizedEmail,
+      subject: "FINTRIX signup request received",
+      html: buildEmailShell({
+        title: "Signup Request Received",
+        preheader: "Your student signup request has been submitted.",
+        greeting: `Dear ${String(name || "Student").trim()},`,
+        intro: "Your student signup request has been received successfully in FINTRIX and is now waiting for caretaker review.",
+        highlight: payload.request.isTemporaryId
+          ? `Temporary Student ID: ${payload.request.studentId}`
+          : `Student ID: ${payload.request.studentId}`,
+        rows: [
+          { label: "Student ID", value: payload.request.studentId },
+          { label: "Request Status", value: "Pending Caretaker Review" },
+          { label: "Next Step", value: "Caretaker review, then admin approval" },
+        ],
+        outro: "Please keep this student ID safe. You can sign in only after your request has been approved.",
+        footerNote: "Signup request notifications are sent automatically from FINTRIX.",
+      }),
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Signup request submitted successfully. Please wait for approval.",
+      data: {
+        signupRequestId: payload.request._id,
+        studentId: payload.request.studentId,
+        isTemporaryId: payload.request.isTemporaryId,
+        approvalStatus: payload.user.approvalStatus,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000 || error.status === 409) {
+      return res.status(409).json({ success: false, message: error.message || "Duplicate signup request." });
+    }
+
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Server error.",
+    });
+  }
+};
+
+const requestPasswordResetOtp = async (req, res) => {
+  try {
+    const normalizedEmail = normalizeEmail(req.body.email);
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select("+refreshTokenHash");
+
+    if (user && user.isActive !== false && (user.role !== "student" || (user.approvalStatus || "approved") === "approved")) {
+      await issueOtpForUser({
+        user,
+        email: normalizedEmail,
+        subject: "FINTRIX password reset OTP",
+        title: "Password Reset OTP",
+        preheader: "Use this OTP to reset your FINTRIX password.",
+        intro: "A password reset request was received for your FINTRIX account. Use the OTP below to continue.",
+        footerNote: "Password reset OTPs are generated securely by FINTRIX.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "If an approved account exists for that email, an OTP has been sent.",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+const resetPasswordWithOtp = async (req, res) => {
+  try {
+    const normalizedEmail = normalizeEmail(req.body.email);
+    const otp = String(req.body.otp || "").trim();
+    const newPassword = String(req.body.newPassword || "");
+
+    if (!normalizedEmail || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "email, otp, and newPassword are required.",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 8 characters.",
+      });
+    }
+
+    const { user, resetRecord, error } = await validateOtpAndLoadUser({
+      email: normalizedEmail,
+      otp,
+    });
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    user.password = newPassword;
+    user.isFirstLogin = false;
+    user.refreshTokenHash = null;
+    await user.save();
+
+    resetRecord.usedAt = new Date();
+    await resetRecord.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully.",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+};
+
+module.exports = {
+  login,
+  signupStudent,
+  requestPasswordResetOtp,
+  resetPasswordWithOtp,
+  refreshSession,
+  changePassword,
+  requestProfilePasswordOtp,
+  changePasswordWithOtp,
+  getCurrentUser,
+  updateProfile,
+};

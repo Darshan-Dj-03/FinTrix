@@ -872,14 +872,24 @@ const updateStudentPaymentDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: "Bill not found." });
     }
 
-    if (req.user.role !== "student" || String(bill.userId?._id || bill.userId) !== String(req.user._id)) {
+    if (req.user.role === "student" && String(bill.userId?._id || bill.userId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: "You can only update your own payment details." });
     }
 
-    if (bill.is_ebl_student || bill.payment_status === "ebl") {
+    if (
+      req.user.role === "caretaker" &&
+      String(bill.hostelId?._id || bill.hostelId) !== String(req.user.hostelId)
+    ) {
+      return res.status(403).json({ success: false, message: "You can only update payment details for your hostel." });
+    }
+
+    const supportsRegularPaymentUtr =
+      !bill.is_ebl_student || Number(bill.ebl_remaining_balance || 0) > 0;
+
+    if (!supportsRegularPaymentUtr) {
       return res.status(400).json({
         success: false,
-        message: "EBL reimbursement bills do not use the regular student payment UTR flow.",
+        message: "This EBL bill does not currently require student balance payment details.",
       });
     }
 

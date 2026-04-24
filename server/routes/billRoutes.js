@@ -133,7 +133,7 @@ router.get(
 router.put(
   "/payment-info/:billId",
   protect,
-  checkRole("student"),
+  checkRole("student", "caretaker", "admin"),
   updateStudentPaymentDetails
 );
 

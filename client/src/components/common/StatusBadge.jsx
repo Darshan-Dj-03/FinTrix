@@ -17,6 +17,13 @@ const badgeMap = {
   enrolled: "bg-fuchsia-100 text-fuchsia-700",
   not_applicable: "bg-amber-100 text-amber-700",
   ebl: "bg-blue-100 text-blue-700",
+  partial_scholarship_received: "bg-sky-100 text-sky-700",
+  partial_university_claim_received: "bg-indigo-100 text-indigo-700",
+};
+
+const labelMap = {
+  partial_scholarship_received: "Partially Paid - Scholarship Received",
+  partial_university_claim_received: "Partially Paid - University Claim Received",
 };
 
 export function StatusBadge({ value }) {
@@ -27,7 +34,7 @@ export function StatusBadge({ value }) {
         badgeMap[value] || "bg-slate-200 text-slate-700"
       )}
     >
-      {String(value || "unknown").replaceAll("_", " ")}
+      {labelMap[value] || String(value || "unknown").replaceAll("_", " ")}
     </span>
   );
 }

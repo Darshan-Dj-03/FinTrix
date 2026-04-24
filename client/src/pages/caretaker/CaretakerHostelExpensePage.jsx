@@ -16,6 +16,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { StatCard } from "../../components/common/StatCard";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
 import {
   blankHostelExpenseBill,
   calculateHostelExpense,
@@ -285,7 +286,7 @@ export function CaretakerHostelExpensePage() {
         {items.map((item, index) => (
           <div
             key={`${fieldKey}-${index}`}
-            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-[1fr_0.9fr_0.9fr_1.3fr_0.8fr_auto]"
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-[1fr_0.9fr_0.9fr_0.8fr_auto]"
           >
             <Input
               placeholder="Store name"
@@ -303,11 +304,6 @@ export function CaretakerHostelExpensePage() {
               onChange={(event) => updateBillItem(fieldKey, index, "cheque_number", event.target.value)}
             />
             <Input
-              placeholder="Brief description"
-              value={item.description}
-              onChange={(event) => updateBillItem(fieldKey, index, "description", event.target.value)}
-            />
-            <Input
               type="number"
               min="0"
               step="0.01"
@@ -323,6 +319,15 @@ export function CaretakerHostelExpensePage() {
             >
               <Trash2 size={16} />
             </button>
+            <div className="sm:col-span-2 xl:col-span-5">
+              <Textarea
+                rows={4}
+                className="min-h-[120px]"
+                placeholder="Detailed description"
+                value={item.description}
+                onChange={(event) => updateBillItem(fieldKey, index, "description", event.target.value)}
+              />
+            </div>
           </div>
         ))}
         <button

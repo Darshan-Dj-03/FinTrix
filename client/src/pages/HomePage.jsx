@@ -42,7 +42,7 @@ const featureCards = [
   {
     icon: WalletCards,
     title: "Payment operations that stay synced",
-    copy: "Collections, ledger totals, and bill states move together so caretakers never update two systems.",
+    copy: "Collections and bill states stay aligned so caretakers can record payments without any parallel reconciliation screen.",
   },
   {
     icon: ShieldCheck,
@@ -62,7 +62,7 @@ const workflowSteps = [
   },
   {
     title: "Approve",
-    description: "Push reports through warden and dean approval, then reconcile the cycle through payments and ledger.",
+    description: "Push reports through warden and dean approval, then close the monthly cycle through payments and reporting.",
   },
 ];
 
@@ -80,7 +80,7 @@ const roleCards = [
   {
     icon: BarChart3,
     title: "Institution review",
-    description: "Approvals, analytics, and ledger views stay visible for warden, dean, and admin users.",
+    description: "Approvals, analytics, and report views stay visible for warden, dean, and admin users.",
   },
 ];
 
@@ -112,6 +112,23 @@ const teamMembers = [
     initials: "VI",
     linkedin: "https://www.linkedin.com/in/vaishnavi",
     github: "https://github.com/vaishnavi",
+  },
+];
+
+const projectGuides = [
+  {
+    name: "Project Guide 01",
+    role: "Faculty Guide",
+    initials: "PG",
+    description:
+      "With sincere gratitude for the academic support, mentorship, and guidance that helped shape the direction and quality of the Fintrix project.",
+  },
+  {
+    name: "Project Guide 02",
+    role: "Faculty Guide",
+    initials: "PG",
+    description:
+      "Thank you for the encouragement, review, and valuable insights provided throughout the planning, development, and refinement of the overall system workflow.",
   },
 ];
 
@@ -512,6 +529,47 @@ export function HomePage() {
                   </div>
                 ))}
               </div>
+
+              <div className="mt-10 border-t border-slate-200 pt-8">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-600">Project Guides</p>
+                    <h3 className="mt-3 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+                      Thank you to our project guides for their support.
+                    </h3>
+                  </div>
+                  <p className="max-w-xl text-sm leading-7 text-slate-500 sm:text-base">
+                    We are grateful for the mentorship, encouragement, and academic guidance that supported the team throughout the Fintrix project journey.
+                  </p>
+                </div>
+
+                <div className="mt-8 grid gap-5 md:grid-cols-2">
+                  {projectGuides.map((guide, index) => (
+                    <div
+                      key={guide.title}
+                      className={`home-reveal team-card team-card-glow rounded-2xl border border-white/80 bg-white/90 p-5 shadow-panel backdrop-blur home-reveal-delay-${Math.min(index + 1, 2)}`}
+                    >
+                      <div className="team-card-highlight" />
+                      <div className="flex items-center gap-4">
+                        <div className="team-avatar-ring flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 via-orange-400 to-rose-400 font-display text-lg font-bold text-white shadow-md">
+                          {guide.initials}
+                        </div>
+                        <div>
+                          <h3 className="font-display text-xl font-bold text-ink">{guide.name}</h3>
+                          <p className="inline-flex rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700">
+                            {guide.role}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-sm leading-7 text-slate-600">{guide.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         </section>

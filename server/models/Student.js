@@ -41,12 +41,6 @@ const studentSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
-    studentClass: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
     // false = on vacation / inactive (not billed for that period)
     isActive: {
       type: Boolean,

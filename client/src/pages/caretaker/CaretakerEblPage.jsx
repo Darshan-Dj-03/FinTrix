@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
@@ -27,7 +27,7 @@ const DEFAULT_FORM = {
   studentId: "",
   fromMonth: getMonthOffset(CURRENT_MONTH, 3),
   toMonth: CURRENT_MONTH,
-  monthlyGoiAmount: "",
+  universityClaimAmount: "",
   periodUtr: "",
   scholarshipNotes: "",
 };
@@ -40,6 +40,10 @@ const getSortableMonthValue = (month) => {
 export function CaretakerEblPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [editingId, setEditingId] = useState("");
+  const [reportRange, setReportRange] = useState({
+    fromMonth: getMonthOffset(CURRENT_MONTH, 3),
+    toMonth: CURRENT_MONTH,
+  });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -58,17 +62,99 @@ export function CaretakerEblPage() {
   });
 
   const eblStudents = (studentsQuery.data?.students || []).filter((student) => student.isEBL);
+  const selectedRangeBills = useMemo(
+    () =>
+      ((billHistoryQuery.data?.data) || [])
+        .filter((row) => {
+          const currentValue = getSortableMonthValue(row.month);
+          const fromValue = getSortableMonthValue(form.fromMonth);
+          const toValue = getSortableMonthValue(form.toMonth);
+          const lowerBound = Math.min(fromValue, toValue);
+          const upperBound = Math.max(fromValue, toValue);
+          return currentValue >= lowerBound && currentValue <= upperBound;
+        })
+        .sort((left, right) => getSortableMonthValue(left.month) - getSortableMonthValue(right.month)),
+    [billHistoryQuery.data?.data, form.fromMonth, form.toMonth]
+  );
 
-  const selectedRangeMessBillTotal = ((billHistoryQuery.data?.data) || [])
-    .filter((row) => {
-      const currentValue = getSortableMonthValue(row.month);
-      const fromValue = getSortableMonthValue(form.fromMonth);
-      const toValue = getSortableMonthValue(form.toMonth);
-      const lowerBound = Math.min(fromValue, toValue);
-      const upperBound = Math.max(fromValue, toValue);
-      return currentValue >= lowerBound && currentValue <= upperBound;
-    })
-    .reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
+  const periods = periodsQuery.data?.data || [];
+  const matchedPeriod = periods.find(
+    (row) =>
+      String(row.studentId?._id || row.studentId) === String(form.studentId) &&
+      row.fromMonth === form.fromMonth &&
+      row.toMonth === form.toMonth
+  );
+  const selectedRangeMessBillTotal = selectedRangeBills.reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
+  const selectedRangeDifferenceTotal = selectedRangeBills.reduce(
+    (sum, row) => sum + Number(row.ebl_difference_amount || 0),
+    0
+  );
+  const appliedUniversityClaimTotal = Math.min(
+    Math.max(Number(form.universityClaimAmount || 0), 0),
+    Math.max(selectedRangeDifferenceTotal, 0)
+  );
+  const totalDifferenceWeight = selectedRangeBills.reduce(
+    (sum, row) => sum + Math.max(Number(row.ebl_difference_amount || 0), 0),
+    0
+  );
+  const settlementRows = selectedRangeBills.map((row) => {
+    const differenceAmount = Number(row.ebl_difference_amount || 0);
+    const claimedAmount =
+      totalDifferenceWeight > 0
+        ? Math.round(((appliedUniversityClaimTotal * differenceAmount) / totalDifferenceWeight + Number.EPSILON) * 100) / 100
+        : 0;
+    const remainingBalance = Math.max(differenceAmount - claimedAmount, 0);
+
+    return {
+      ...row,
+      claimedAmount,
+      differenceAmount,
+      remainingBalance,
+    };
+  });
+
+  useEffect(() => {
+    if (!matchedPeriod) {
+      return;
+    }
+
+    setEditingId((current) => (current === matchedPeriod._id ? current : matchedPeriod._id));
+    setForm((current) => {
+      const nextForm = {
+        ...current,
+        universityClaimAmount: String(matchedPeriod.universityClaimAmount || ""),
+        periodUtr: matchedPeriod.periodUtr || "",
+        scholarshipNotes: matchedPeriod.scholarshipNotes || "",
+      };
+
+      return JSON.stringify(nextForm) === JSON.stringify(current) ? current : nextForm;
+    });
+  }, [matchedPeriod]);
+
+  useEffect(() => {
+    if (!matchedPeriod && editingId) {
+      setEditingId("");
+    }
+  }, [matchedPeriod, editingId]);
+
+  useEffect(() => {
+    if (matchedPeriod) {
+      return;
+    }
+
+    setForm((current) => {
+      if (!current.universityClaimAmount && !current.periodUtr && !current.scholarshipNotes) {
+        return current;
+      }
+
+      return {
+        ...current,
+        universityClaimAmount: "",
+        periodUtr: "",
+        scholarshipNotes: "",
+      };
+    });
+  }, [matchedPeriod, form.studentId, form.fromMonth, form.toMonth]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload) => {
@@ -78,20 +164,16 @@ export function CaretakerEblPage() {
 
       const normalizedPayload = {
         studentId: payload.studentId,
-        monthlyGoiAmount: Number(payload.monthlyGoiAmount || 0),
+        universityClaimAmount: Number(payload.universityClaimAmount || 0),
         periodUtr: payload.periodUtr,
         scholarshipNotes: payload.scholarshipNotes,
       };
 
-      if (editingId) {
-        return eblApi.updatePeriod(editingId, normalizedPayload);
+      if (matchedPeriod?._id || editingId) {
+        return eblApi.updatePeriod(matchedPeriod?._id || editingId, normalizedPayload);
       }
 
-      return eblApi.createPeriod({
-        ...normalizedPayload,
-        fromMonth: payload.fromMonth,
-        toMonth: payload.toMonth,
-      });
+      throw new Error("Student EBL details must be submitted first before recording the university claim.");
     },
     onSuccess: (response) => {
       const savedPeriod = response?.data;
@@ -108,13 +190,31 @@ export function CaretakerEblPage() {
           };
         });
       }
-      toast.success(editingId ? "EBL period updated." : "EBL period created.");
-      setEditingId("");
-      setForm(DEFAULT_FORM);
+      toast.success("University claim updated.");
       periodsQuery.refetch();
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || error?.message || "Unable to save EBL period.");
+      toast.error(error?.response?.data?.message || error?.message || "Unable to save university claim.");
+    },
+  });
+  const verifyMutation = useMutation({
+    mutationFn: (id) => eblApi.verifyPeriod(id),
+    onSuccess: (response) => {
+      const savedPeriod = response?.data;
+      if (savedPeriod) {
+        queryClient.setQueryData(["caretaker-ebl-periods"], (current) => {
+          const existingRows = current?.data || [];
+          return {
+            ...(current || { success: true }),
+            data: existingRows.map((row) => (row._id === savedPeriod._id ? savedPeriod : row)),
+          };
+        });
+      }
+      toast.success("EBL claim accepted.");
+      periodsQuery.refetch();
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Unable to accept EBL claim.");
     },
   });
 
@@ -122,12 +222,11 @@ export function CaretakerEblPage() {
     mutationFn: ({ reportType }) =>
       eblApi.generateReport({
         reportType,
-        fromMonth: form.fromMonth,
-        toMonth: form.toMonth,
+        fromMonth: reportRange.fromMonth,
+        toMonth: reportRange.toMonth,
       }),
     onSuccess: () => {
       toast.success("EBL report generated.");
-      reportsQuery.refetch();
       navigate("/caretaker/reports");
     },
     onError: (error) => toast.error(error?.response?.data?.message || "Unable to generate EBL report."),
@@ -150,16 +249,56 @@ export function CaretakerEblPage() {
     );
   }
 
+  const draftPeriods = (periodsQuery.data?.data || []).filter((row) => row.status === "draft");
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="EBL"
         title="EBL reimbursement workspace"
-        description="Create EBL periods, record the GOI sanctioned amount for a selected range, and generate the period reports used in approvals."
+        description="Review submitted EBL periods, manage remaining balance settlements, and generate the period reports used in approvals."
       />
 
       <div className="panel p-6">
-        <h2 className="section-title">{editingId ? "Update EBL period" : "Create EBL period"}</h2>
+        <h2 className="section-title">Submitted EBL scholarship details</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Review the GOI amount, duration, UTR, and notes submitted by students, then accept the claim to lock student edits.
+        </p>
+        <div className="mt-5">
+          <DataTable
+            rows={draftPeriods}
+            columns={[
+              { key: "studentId", label: "Student ID", render: (row) => row.studentId?.studentId || "-" },
+              { key: "name", label: "Name", render: (row) => row.userId?.name || "-" },
+              { key: "period", label: "Duration", render: (row) => `${row.fromMonth} to ${row.toMonth}` },
+              { key: "messBill", label: "Mess Bill", render: (row) => formatCurrency(row.totals?.totalMessBill) },
+              { key: "claimed", label: "GOI Claimed", render: (row) => formatCurrency(row.totals?.totalClaimedAmount || row.monthlyGoiAmount) },
+              { key: "utr", label: "UTR", render: (row) => row.periodUtr || "-" },
+              { key: "notes", label: "Notes", render: (row) => row.scholarshipNotes || "-" },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (row) => (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      loading={verifyMutation.isPending}
+                      onClick={() => verifyMutation.mutate(row._id)}
+                    >
+                      Accept
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+            emptyMessage="No student-submitted EBL claims are waiting for caretaker acceptance."
+          />
+        </div>
+      </div>
+
+      <div className="panel p-6">
+        <h2 className="section-title">EBL claim From University</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div>
             <label className="field-label">EBL student</label>
@@ -177,11 +316,19 @@ export function CaretakerEblPage() {
             <Input readOnly value={formatCurrency(selectedRangeMessBillTotal)} />
           </div>
           <div>
-            <label className="field-label">GOI sanctioned amount</label>
-            <Input type="number" value={form.monthlyGoiAmount} onChange={(event) => setForm((current) => ({ ...current, monthlyGoiAmount: event.target.value }))} />
+            <label className="field-label">Difference amount for selected period</label>
+            <Input readOnly value={formatCurrency(selectedRangeDifferenceTotal)} />
           </div>
           <MonthPicker label="From month" value={form.fromMonth} onChange={(value) => setForm((current) => ({ ...current, fromMonth: value }))} />
           <MonthPicker label="To month" value={form.toMonth} onChange={(value) => setForm((current) => ({ ...current, toMonth: value }))} />
+          <div>
+            <label className="field-label">Amount claimed from university</label>
+            <Input
+              type="number"
+              value={form.universityClaimAmount}
+              onChange={(event) => setForm((current) => ({ ...current, universityClaimAmount: event.target.value }))}
+            />
+          </div>
           <div>
             <label className="field-label">Period UTR</label>
             <Input value={form.periodUtr} onChange={(event) => setForm((current) => ({ ...current, periodUtr: event.target.value }))} placeholder="Scholarship transfer UTR" />
@@ -192,22 +339,58 @@ export function CaretakerEblPage() {
           </div>
         </div>
 
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Claim and remaining balance</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                The university claim is reduced from the period difference amount, and the remaining balance shows what the student still needs to pay.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Remaining Total</p>
+              <p className="mt-1 text-lg font-semibold text-slate-800">
+                {formatCurrency(settlementRows.reduce((sum, row) => sum + Number(row.remainingBalance || 0), 0))}
+              </p>
+            </div>
+          </div>
+
+          {settlementRows.length ? (
+            <div className="mt-5 space-y-4">
+              {settlementRows.map((row) => (
+                <div key={row.month} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="grid gap-4 lg:grid-cols-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Month</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">{row.month}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">University Claim</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">{formatCurrency(row.claimedAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Difference Amount</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">{formatCurrency(row.differenceAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Remaining Balance</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">{formatCurrency(row.remainingBalance)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+              Select an EBL student and the same month range submitted by the student to record the university claim.
+            </div>
+          )}
+        </div>
+
         <div className="mt-5 flex flex-wrap gap-3">
           <Button type="button" loading={saveMutation.isPending} onClick={() => saveMutation.mutate(form)}>
-            {editingId ? "Update period" : "Save period"}
+            Save university claim
           </Button>
-          {editingId ? (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setEditingId("");
-                setForm(DEFAULT_FORM);
-              }}
-            >
-              Cancel edit
-            </Button>
-          ) : null}
         </div>
       </div>
 
@@ -216,6 +399,18 @@ export function CaretakerEblPage() {
         <p className="mt-2 text-sm text-slate-500">
           Generate the period reports here. They will appear in the reports page and the warden approval flow.
         </p>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <MonthPicker
+            label="Report from month"
+            value={reportRange.fromMonth}
+            onChange={(value) => setReportRange((current) => ({ ...current, fromMonth: value }))}
+          />
+          <MonthPicker
+            label="Report to month"
+            value={reportRange.toMonth}
+            onChange={(value) => setReportRange((current) => ({ ...current, toMonth: value }))}
+          />
+        </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           <Button
             type="button"
@@ -233,6 +428,22 @@ export function CaretakerEblPage() {
           >
             Generate Month-wise Calculation
           </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={generateReportMutation.isPending}
+            onClick={() => generateReportMutation.mutate({ reportType: "university_claim" })}
+          >
+            Generate University Claim Report
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={generateReportMutation.isPending}
+            onClick={() => generateReportMutation.mutate({ reportType: "university_claim_month_wise" })}
+          >
+            Generate University Claim Month-wise
+          </Button>
         </div>
       </div>
 
@@ -246,9 +457,10 @@ export function CaretakerEblPage() {
               { key: "name", label: "Name", render: (row) => row.userId?.name || "-" },
               { key: "period", label: "Period", render: (row) => `${row.fromMonth} to ${row.toMonth}` },
               { key: "messBill", label: "Mess Bill Total", render: (row) => formatCurrency(row.totals?.totalMessBill) },
-              { key: "goi", label: "GOI Amount", render: (row) => formatCurrency(row.monthlyGoiAmount) },
+              { key: "goi", label: "Claimed Amount", render: (row) => formatCurrency(row.totals?.totalClaimedAmount || row.monthlyGoiAmount) },
               { key: "utr", label: "Period UTR", render: (row) => row.periodUtr || "-" },
               { key: "difference", label: "Difference Total", render: (row) => formatCurrency(row.totals?.totalDifference) },
+              { key: "remaining", label: "Remaining Balance", render: (row) => formatCurrency(row.totals?.totalRemainingBalance || 0) },
               {
                 key: "actions",
                 label: "Actions",
@@ -266,6 +478,9 @@ export function CaretakerEblPage() {
                         monthlyGoiAmount: String(row.monthlyGoiAmount || ""),
                         periodUtr: row.periodUtr || "",
                         scholarshipNotes: row.scholarshipNotes || "",
+                        monthlySettlements: Object.fromEntries(
+                          (row.monthlyDetails || []).map((detail) => [detail.month, String(detail.studentPaidAmount || 0)])
+                        ),
                       });
                     }}
                   >

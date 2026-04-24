@@ -27,17 +27,9 @@ const CREATE_DEFAULTS = {
   gender: "male",
   isEBL: "false",
 };
-
-const EDIT_DEFAULTS = {
-  name: "",
-  email: "",
-  role: "student",
-  hostelId: "",
+const FORM_DEFAULTS = {
+  ...CREATE_DEFAULTS,
   isActive: "true",
-  studentIdMode: "automatic",
-  studentId: "",
-  gender: "male",
-  isEBL: "false",
 };
 
 const ROLE_OPTIONS = ["student", "caretaker", "warden", "dean"];
@@ -46,7 +38,7 @@ const HOSTEL_BOUND_ROLES = ["student", "caretaker"];
 export function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
-  const editFormRef = useRef(null);
+  const formRef = useRef(null);
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
     queryFn: adminApi.listUsers,
@@ -56,19 +48,17 @@ export function AdminUsersPage() {
     queryFn: hostelApi.list,
   });
 
-  const createForm = useForm({ defaultValues: CREATE_DEFAULTS });
-  const editForm = useForm({ defaultValues: EDIT_DEFAULTS });
+  const userForm = useForm({ defaultValues: FORM_DEFAULTS });
 
-  const createRole = createForm.watch("role");
-  const createStudentIdMode = createForm.watch("studentIdMode");
-  const editRole = editForm.watch("role");
-  const editStudentIdMode = editForm.watch("studentIdMode");
+  const formRole = userForm.watch("role");
+  const formStudentIdMode = userForm.watch("studentIdMode");
+  const isEditMode = Boolean(selectedUser);
 
   const createMutation = useMutation({
     mutationFn: adminApi.createUser,
     onSuccess: () => {
       toast.success("User created successfully.");
-      createForm.reset(CREATE_DEFAULTS);
+      userForm.reset(FORM_DEFAULTS);
       usersQuery.refetch();
     },
     onError: (error) => {
@@ -80,6 +70,8 @@ export function AdminUsersPage() {
     mutationFn: ({ id, payload }) => adminApi.updateUser(id, payload),
     onSuccess: () => {
       toast.success("User updated successfully.");
+      setSelectedUser(null);
+      userForm.reset(FORM_DEFAULTS);
       usersQuery.refetch();
     },
     onError: (error) => {
@@ -88,11 +80,16 @@ export function AdminUsersPage() {
   });
 
   useEffect(() => {
-    if (!selectedUser) return;
+    if (!selectedUser) {
+      userForm.reset(FORM_DEFAULTS);
+      return;
+    }
 
-    editForm.reset({
+    userForm.reset({
+      ...FORM_DEFAULTS,
       name: selectedUser.name || "",
       email: selectedUser.email || "",
+      password: "",
       role: selectedUser.role || "student",
       hostelId: selectedUser.hostelId?._id || "",
       isActive: String(selectedUser.isActive ?? true),
@@ -101,11 +98,11 @@ export function AdminUsersPage() {
       gender: selectedUser.studentProfile?.gender || "male",
       isEBL: String(selectedUser.studentProfile?.isEBL ?? false),
     });
-  }, [selectedUser, editForm]);
+  }, [selectedUser, userForm]);
 
   useEffect(() => {
-    if (!selectedUser || !editFormRef.current) return;
-    editFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!selectedUser || !formRef.current) return;
+    formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedUser]);
 
   const rows = useMemo(() => {
@@ -176,209 +173,160 @@ export function AdminUsersPage() {
       <PageHeader
         eyebrow="Users"
         title="User management"
-        description="Create and manage student, caretaker, warden, and dean accounts from one admin workspace."
+        description="Create, update, and manage student, caretaker, warden, and dean accounts from one admin workspace."
       />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <form
-          className="panel p-6"
-          onSubmit={createForm.handleSubmit((values) => createMutation.mutate(buildPayload(values, "create")))}
-        >
-          <h2 className="section-title">Create user</h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="field-label">Name</label>
-              <Input {...createForm.register("name", { required: "Name is required" })} />
-              {createForm.formState.errors.name ? (
-                <p className="mt-2 text-sm text-rose-500">{createForm.formState.errors.name.message}</p>
-              ) : null}
-            </div>
-            <div className="md:col-span-2">
-              <label className="field-label">Email</label>
-              <Input type="email" {...createForm.register("email", { required: "Email is required" })} />
-              {createForm.formState.errors.email ? (
-                <p className="mt-2 text-sm text-rose-500">{createForm.formState.errors.email.message}</p>
-              ) : null}
-            </div>
+      <form
+        ref={formRef}
+        className="panel p-6"
+        onSubmit={userForm.handleSubmit((values) => {
+          if (isEditMode) {
+            updateMutation.mutate({ id: selectedUser.id, payload: buildPayload(values, "edit") });
+            return;
+          }
+
+          createMutation.mutate(buildPayload(values, "create"));
+        })}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="section-title">{isEditMode ? "Update user" : "Create user"}</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {isEditMode ? `Editing ${selectedUser.name}` : "Use this single form to create a new user or edit an existing one."}
+            </p>
+          </div>
+          {isEditMode ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setSelectedUser(null);
+                userForm.reset(FORM_DEFAULTS);
+              }}
+            >
+              Cancel edit
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="field-label">Name</label>
+            <Input {...userForm.register("name", { required: "Name is required" })} />
+            {userForm.formState.errors.name ? (
+              <p className="mt-2 text-sm text-rose-500">{userForm.formState.errors.name.message}</p>
+            ) : null}
+          </div>
+          <div className="md:col-span-2">
+            <label className="field-label">Email</label>
+            <Input type="email" {...userForm.register("email", { required: "Email is required" })} />
+            {userForm.formState.errors.email ? (
+              <p className="mt-2 text-sm text-rose-500">{userForm.formState.errors.email.message}</p>
+            ) : null}
+          </div>
+          {!isEditMode ? (
+            <>
             <div>
               <label className="field-label">Password</label>
-              <Input type="password" {...createForm.register("password", { required: "Password is required" })} />
+              <Input type="password" {...userForm.register("password", { required: "Password is required" })} />
             </div>
-            <div>
-              <label className="field-label">Role</label>
-              <Select {...createForm.register("role")}>
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {HOSTEL_BOUND_ROLES.includes(createRole) ? (
-              <div className="md:col-span-2">
-                <label className="field-label">Hostel</label>
-                <Select {...createForm.register("hostelId", { required: "Hostel is required for this role" })}>
-                  <option value="">Select hostel</option>
-                  {hostels.map((hostel) => (
-                    <option key={hostel._id} value={hostel._id}>
-                      {hostel.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            ) : null}
-            {createRole === "student" ? (
-              <>
-                <div>
-                  <label className="field-label">Student ID Mode</label>
-                  <Select {...createForm.register("studentIdMode")}>
-                    <option value="automatic">Automatic temporary ID</option>
-                    <option value="manual">Manual actual ID</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="field-label">Student ID</label>
-                  <Input
-                    disabled={createStudentIdMode !== "manual"}
-                    placeholder={createStudentIdMode === "manual" ? "Enter actual student ID" : "Auto-generated after save"}
-                    {...createForm.register("studentId", {
-                      validate: (value) =>
-                        createStudentIdMode !== "manual" || value.trim() ? true : "Student ID is required",
-                    })}
-                  />
-                </div>
-                <div>
-                  <label className="field-label">Gender</label>
-                  <Select {...createForm.register("gender")}>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="field-label">EBL Student</label>
-                  <Select {...createForm.register("isEBL")}>
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </Select>
-                </div>
-              </>
-            ) : null}
+            <div />
+            </>
+          ) : null}
+          <div>
+            <label className="field-label">Role</label>
+            <Select {...userForm.register("role")}>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {ROLE_LABELS[role]}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div className="mt-5">
-            <Button type="submit" loading={createMutation.isPending}>
-              Create user
-            </Button>
-          </div>
-        </form>
-
-        <form
-          ref={editFormRef}
-          className="panel p-6"
-          onSubmit={editForm.handleSubmit((values) => {
-            if (!selectedUser) return;
-            updateMutation.mutate({ id: selectedUser.id, payload: buildPayload(values, "edit") });
-          })}
-        >
-          <h2 className="section-title">Edit user</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            {selectedUser ? `Editing ${selectedUser.name}` : "Select a user from the table below to edit details."}
-          </p>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="field-label">Name</label>
-              <Input disabled={!selectedUser} {...editForm.register("name", { required: "Name is required" })} />
-            </div>
-            <div className="md:col-span-2">
-              <label className="field-label">Email</label>
-              <Input type="email" disabled={!selectedUser} {...editForm.register("email", { required: "Email is required" })} />
-            </div>
-            <div>
-              <label className="field-label">Role</label>
-              <Select disabled={!selectedUser} {...editForm.register("role")}>
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-            </div>
+          {isEditMode ? (
             <div>
               <label className="field-label">Status</label>
-              <Select disabled={!selectedUser} {...editForm.register("isActive")}>
+              <Select {...userForm.register("isActive")}>
                 <option value="true">Active</option>
                 <option value="false">Inactive</option>
               </Select>
             </div>
-            {HOSTEL_BOUND_ROLES.includes(editRole) ? (
-              <div className="md:col-span-2">
-                <label className="field-label">Hostel</label>
-                <Select disabled={!selectedUser} {...editForm.register("hostelId", { required: "Hostel is required for this role" })}>
-                  <option value="">Select hostel</option>
-                  {hostels.map((hostel) => (
-                    <option key={hostel._id} value={hostel._id}>
-                      {hostel.name}
-                    </option>
-                  ))}
+          ) : (
+            <div />
+          )}
+          {HOSTEL_BOUND_ROLES.includes(formRole) ? (
+            <div className="md:col-span-2">
+              <label className="field-label">Hostel</label>
+              <Select {...userForm.register("hostelId", { required: "Hostel is required for this role" })}>
+                <option value="">Select hostel</option>
+                {hostels.map((hostel) => (
+                  <option key={hostel._id} value={hostel._id}>
+                    {hostel.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+          {formRole === "student" ? (
+            <>
+              <div>
+                <label className="field-label">Student ID Mode</label>
+                <Select {...userForm.register("studentIdMode")}>
+                  <option value="automatic">Automatic temporary ID</option>
+                  <option value="manual">Manual actual ID</option>
                 </Select>
               </div>
-            ) : null}
-            {editRole === "student" ? (
-              <>
-                <div>
-                  <label className="field-label">Student ID Mode</label>
-                  <Select disabled={!selectedUser} {...editForm.register("studentIdMode")}>
-                    <option value="automatic">Automatic temporary ID</option>
-                    <option value="manual">Manual actual ID</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="field-label">Student ID</label>
-                  <Input
-                    disabled={!selectedUser || editStudentIdMode !== "manual"}
-                    placeholder={editStudentIdMode === "manual" ? "Enter actual student ID" : "Temporary ID remains active"}
-                    {...editForm.register("studentId", {
-                      validate: (value) =>
-                        editStudentIdMode !== "manual" || value.trim() ? true : "Student ID is required",
-                    })}
-                  />
-                </div>
-                <div>
-                  <label className="field-label">Gender</label>
-                  <Select disabled={!selectedUser} {...editForm.register("gender")}>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="field-label">EBL Student</label>
-                  <Select disabled={!selectedUser} {...editForm.register("isEBL")}>
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </Select>
-                </div>
-              </>
-            ) : null}
-          </div>
+              <div>
+                <label className="field-label">Student ID</label>
+                <Input
+                  disabled={formStudentIdMode !== "manual"}
+                  placeholder={
+                    formStudentIdMode === "manual"
+                      ? "Enter actual student ID"
+                      : isEditMode
+                        ? "Temporary ID remains active"
+                        : "Auto-generated after save"
+                  }
+                  {...userForm.register("studentId", {
+                    validate: (value) =>
+                      formStudentIdMode !== "manual" || value.trim() ? true : "Student ID is required",
+                  })}
+                />
+              </div>
+              <div>
+                <label className="field-label">Gender</label>
+                <Select {...userForm.register("gender")}>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </Select>
+              </div>
+              <div>
+                <label className="field-label">EBL Student</label>
+                <Select {...userForm.register("isEBL")}>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </Select>
+              </div>
+            </>
+          ) : null}
+        </div>
 
-          <div className="mt-5 flex gap-3">
-            <Button type="submit" loading={updateMutation.isPending} disabled={!selectedUser}>
-              Save changes
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!selectedUser}
-              onClick={() => {
-                setSelectedUser(null);
-                editForm.reset(EDIT_DEFAULTS);
-              }}
-            >
-              Clear
-            </Button>
-          </div>
-        </form>
-      </div>
+        <div className="mt-5 flex gap-3">
+          <Button type="submit" loading={createMutation.isPending || updateMutation.isPending}>
+            {isEditMode ? "Update user" : "Create user"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setSelectedUser(null);
+              userForm.reset(FORM_DEFAULTS);
+            }}
+          >
+            Reset
+          </Button>
+        </div>
+      </form>
 
       <div className="panel p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -233,6 +233,21 @@ const messBillSchema = new mongoose.Schema(
       default: 0,
       min: [0, "milk_total cannot be negative"],
     },
+    absent_days: {
+      type: Number,
+      default: 0,
+      min: [0, "absent_days cannot be negative"],
+    },
+    billable_days: {
+      type: Number,
+      default: 0,
+      min: [0, "billable_days cannot be negative"],
+    },
+    absence_deduction: {
+      type: Number,
+      default: 0,
+      min: [0, "absence_deduction cannot be negative"],
+    },
 
     // ── Final Amount & Payment ─────────────────────────────────────────────────
 
@@ -306,8 +321,8 @@ const messBillSchema = new mongoose.Schema(
     payment_status: {
       type: String,
       enum: {
-        values: ["pending", "partial", "paid", "ebl"],
-        message: 'payment_status must be "pending", "partial", "paid", or "ebl"',
+        values: ["pending", "partial", "paid", "ebl", "partial_scholarship_received", "partial_university_claim_received"],
+        message: 'payment_status must be "pending", "partial", "paid", "ebl", "partial_scholarship_received", or "partial_university_claim_received"',
       },
       default: "pending",
     },
@@ -315,6 +330,24 @@ const messBillSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: [0, "amount_paid cannot be negative"],
+    },
+    ebl_claimed_amount: {
+      type: Number,
+      default: 0,
+      min: [0, "ebl_claimed_amount cannot be negative"],
+    },
+    ebl_difference_amount: {
+      type: Number,
+      default: 0,
+    },
+    ebl_student_paid_amount: {
+      type: Number,
+      default: 0,
+      min: [0, "ebl_student_paid_amount cannot be negative"],
+    },
+    ebl_remaining_balance: {
+      type: Number,
+      default: 0,
     },
   },
   {

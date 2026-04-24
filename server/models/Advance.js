@@ -12,6 +12,31 @@ const advanceBillDateSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const advanceSettlementSchema = new mongoose.Schema(
+  {
+    settlementDate: {
+      type: Date,
+      required: [true, "settlementDate is required."],
+    },
+    amount: {
+      type: Number,
+      required: [true, "amount is required."],
+      min: [0, "amount cannot be negative"],
+    },
+    notes: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    recordedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+  },
+  { _id: true }
+);
+
 const advanceSchema = new mongoose.Schema(
   {
     hostelId: {
@@ -39,6 +64,10 @@ const advanceSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: [0, "closedAmount cannot be negative"],
+    },
+    settlements: {
+      type: [advanceSettlementSchema],
+      default: [],
     },
     billDates: {
       type: [advanceBillDateSchema],

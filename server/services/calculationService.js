@@ -41,6 +41,22 @@ const getDaysInMonth = (month) => {
   return new Date(year, monthIndex + 1, 0).getDate();
 };
 
+const calculateAbsenceDeduction = ({ absentDays, daysInMonth, perDayMessBill, monthlyMessBill }) => {
+  const safeAbsentDays = Math.max(0, Math.min(daysInMonth, Number(absentDays || 0)));
+  const safePerDayMessBill = Math.max(0, Number(perDayMessBill || 0));
+  const safeMonthlyMessBill = Math.max(0, Number(monthlyMessBill || 0));
+
+  if (safeAbsentDays <= 4) {
+    return 0;
+  }
+
+  if (safeAbsentDays <= 9) {
+    return roundTwoDecimals(safeAbsentDays * 10);
+  }
+
+  return roundTwoDecimals(safeAbsentDays * safePerDayMessBill);
+};
+
 /**
  * Calculate the due date for a bill in a given month.
  *
@@ -229,11 +245,14 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
     const paneerTotal = roundUpCurrency(expense.paneer_price * consumption.paneer_count);
     const milkTotal = roundUpCurrency(consumption.milk_amount);
     const absentDays = Math.max(0, Math.min(getDaysInMonth(expense.month), Number(consumption.absent_days || 0)));
-    const billableDays = Math.max(getDaysInMonth(expense.month) - absentDays, 0);
-    const baseMessCharge =
-      billableDays < daysInMonth
-        ? roundUpCurrency(derivedMessBillPerDay * billableDays)
-        : roundUpCurrency(baseMessMonthly);
+    const absenceDeduction = calculateAbsenceDeduction({
+      absentDays,
+      daysInMonth,
+      perDayMessBill: derivedMessBillPerDay,
+      monthlyMessBill: baseMessMonthly,
+    });
+    const billableDays = absentDays >= 10 ? Math.max(daysInMonth - absentDays, 0) : daysInMonth;
+    const baseMessCharge = roundUpCurrency(Math.max(baseMessMonthly - absenceDeduction, 0));
 
     // Total amount
     const totalAmount = roundUpCurrency(
@@ -284,6 +303,7 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
       milk_total: milkTotal,
       absent_days: absentDays,
       billable_days: billableDays,
+      absence_deduction: absenceDeduction,
 
       // Final
       total_amount: totalAmount,
@@ -306,5 +326,6 @@ module.exports = {
   generateMessBills,
   calculateDueDate,
   calculateFine,
+  calculateAbsenceDeduction,
   roundTwoDecimals,
 };

@@ -282,6 +282,8 @@ const sendApprovalStatusEmail = async ({
 
 module.exports = {
   isEmailConfigured,
+  sendEmail,
+  buildEmailShell,
   sendBillEmail,
   sendPaymentConfirmation,
   sendPaymentReminder,

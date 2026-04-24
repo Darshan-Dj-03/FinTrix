@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, FileBarChart2, ShieldCheck } from "lucide-react";
 
 import { hostelApi } from "../../api/hostelApi";
-import { ledgerApi } from "../../api/ledgerApi";
 import { monthlyExpenseReportApi } from "../../api/monthlyExpenseReportApi";
 import { reportApi } from "../../api/reportApi";
 import { studentApi } from "../../api/studentApi";
@@ -53,11 +52,6 @@ export function AdminOverviewPage() {
     queryFn: () => reportApi.getFull(month, scopedParams),
     enabled: user?.role === "caretaker" || Boolean(selectedHostelId),
   });
-  const ledgerQuery = useQuery({
-    queryKey: ["admin-overview-ledger", month, selectedHostelId],
-    queryFn: () => ledgerApi.list(month, scopedParams),
-    enabled: user?.role === "caretaker" || Boolean(selectedHostelId),
-  });
   const monthlyExpenseReportQuery = useQuery({
     queryKey: ["admin-overview-monthly-expense-report", month, selectedHostelId],
     queryFn: async () => {
@@ -82,7 +76,6 @@ export function AdminOverviewPage() {
   if (
     hostelsQuery.isLoading ||
     reportQuery.isLoading ||
-    ledgerQuery.isLoading ||
     studentsQuery.isLoading
   ) {
     return <LoadingState label="Loading admin overview..." />;
@@ -91,7 +84,6 @@ export function AdminOverviewPage() {
   if (
     hostelsQuery.isError ||
     reportQuery.isError ||
-    ledgerQuery.isError ||
     studentsQuery.isError
   ) {
     return (
@@ -100,7 +92,6 @@ export function AdminOverviewPage() {
         onRetry={() => {
           hostelsQuery.refetch();
           reportQuery.refetch();
-          ledgerQuery.refetch();
           monthlyExpenseReportQuery.refetch();
           studentsQuery.refetch();
         }}
@@ -109,7 +100,6 @@ export function AdminOverviewPage() {
   }
 
   const report = reportQuery.data?.data || {};
-  const ledger = ledgerQuery.data?.data?.[0] || {};
   const monthlyExpenseReport = monthlyExpenseReportQuery.data?.data || null;
   const scopedStudents = (studentsQuery.data?.students || []).filter((student) => {
     if (user?.role === "caretaker") {
@@ -120,13 +110,10 @@ export function AdminOverviewPage() {
     }
     return student.userId?.hostelId?._id?.toString() === selectedHostelId;
   });
-  const closingBalance =
-    monthlyExpenseReport?.total_closing_balance ??
-    ledger.closingBalance ??
-    0;
+  const closingBalance = monthlyExpenseReport?.total_closing_balance ?? 0;
   const closingBalanceHint = monthlyExpenseReport
     ? "MSC Total + Closing Balance Last Month from the approved monthly expenditure report."
-    : "Ledger closing balance for the selected month. Generate the monthly expenditure report to see the report-side closing balance here.";
+    : "Generate the monthly expenditure report to see the closing balance for the selected month here.";
 
   return (
     <div className="space-y-6">

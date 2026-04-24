@@ -109,7 +109,9 @@ export function StudentOverviewPage() {
     );
   }
 
-  const currentPayable = isEblMonth ? 0 : Math.max(0, Number(bill?.total_amount || 0) + Number(bill?.fine || 0) - Number(bill?.amount_paid || 0));
+  const currentPayable = isEblMonth
+    ? Math.max(0, Number(bill?.ebl_remaining_balance || bill?.outstanding_amount || 0))
+    : Math.max(0, Number(bill?.total_amount || 0) + Number(bill?.fine || 0) - Number(bill?.amount_paid || 0));
   const currentFine = isEblMonth ? 0 : bill?.fine || 0;
 
   return (
@@ -153,6 +155,14 @@ export function StudentOverviewPage() {
                   <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.base_mess)}</p>
                 </div>
                 <div className="panel-soft p-4">
+                  <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Absent days</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-800">{Number(bill.absent_days || 0)}</p>
+                </div>
+                <div className="panel-soft p-4">
+                  <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Absence deduction</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.absence_deduction || 0)}</p>
+                </div>
+                <div className="panel-soft p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Utilities + labour</p>
                   <p className="mt-2 text-lg font-semibold text-slate-800">
                     {formatCurrency((bill.keb_charge || 0) + (bill.labour_charge || 0))}
@@ -171,9 +181,25 @@ export function StudentOverviewPage() {
                 <p className="text-xs uppercase tracking-[0.28em] text-white/60">Amount paid</p>
                 <p className="mt-3 font-display text-4xl font-bold">{formatCurrency(bill.amount_paid || 0)}</p>
               </div>
+              {isEblMonth ? (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="panel-soft p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Claimed amount</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_claimed_amount || 0)}</p>
+                  </div>
+                  <div className="panel-soft p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Difference amount</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_difference_amount || 0)}</p>
+                  </div>
+                  <div className="panel-soft p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Remaining balance</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_remaining_balance || 0)}</p>
+                  </div>
+                </div>
+              ) : null}
               <p className="text-sm text-slate-500">
                 {isEblMonth
-                  ? "This month is settled through the EBL workflow. Students do not handle late fine or direct bill payment here."
+                  ? "This month is tracked through the EBL workflow. The claimed amount, difference amount, and remaining balance are shown here, and the caretaker updates the balance after collection."
                   : "Late fine is updated daily after the due date: Rs.2 per day for the first 30 days, then Rs.5 per day."}
               </p>
             </div>

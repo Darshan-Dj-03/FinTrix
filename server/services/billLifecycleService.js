@@ -9,6 +9,7 @@ const toNumber = (value) => {
 };
 
 const roundUpCurrency = (value = 0) => Math.ceil(Math.max(toNumber(value), 0));
+const roundTwoDecimals = (value = 0) => Math.round(Math.max(toNumber(value), 0) * 100) / 100;
 
 const calculateDynamicFine = (dueDate, currentDate = new Date()) => {
   if (!dueDate) {
@@ -33,6 +34,39 @@ const calculateDynamicFine = (dueDate, currentDate = new Date()) => {
   return roundUpCurrency((30 * FIRST_FINE_RATE) + ((daysLate - 30) * SECOND_FINE_RATE));
 };
 
+const getAbsenceImpact = (bill) => {
+  const absentDays = Math.max(0, toNumber(bill?.absent_days));
+  const billableDays = Math.max(0, toNumber(bill?.billable_days));
+  const baseMess = Math.max(0, toNumber(bill?.base_mess));
+  const storedDeduction = Math.max(0, toNumber(bill?.absence_deduction));
+
+  if (storedDeduction > 0 || absentDays === 0) {
+    return {
+      absent_days: absentDays,
+      billable_days: billableDays,
+      absence_deduction: roundTwoDecimals(storedDeduction),
+      base_mess_before_absence: roundTwoDecimals(baseMess + storedDeduction),
+    };
+  }
+
+  let inferredDeduction = 0;
+
+  if (absentDays <= 4) {
+    inferredDeduction = 0;
+  } else if (absentDays <= 9) {
+    inferredDeduction = absentDays * 10;
+  } else if (billableDays > 0) {
+    inferredDeduction = (baseMess / billableDays) * absentDays;
+  }
+
+  return {
+    absent_days: absentDays,
+    billable_days: billableDays,
+    absence_deduction: roundTwoDecimals(inferredDeduction),
+    base_mess_before_absence: roundTwoDecimals(baseMess + inferredDeduction),
+  };
+};
+
 const applyLiveBillState = (bill, currentDate = new Date()) => {
   if (!bill) {
     return bill;
@@ -41,12 +75,42 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
   const totalAmount = roundUpCurrency(bill.total_amount || 0);
   const amountPaid = roundUpCurrency(bill.amount_paid || 0);
   const isEblStudent = Boolean(bill.is_ebl_student);
+  const absenceImpact = getAbsenceImpact(bill);
   if (isEblStudent) {
-    const hasClaimSettlement =
-      bill.payment_status === "paid" || (Boolean(String(bill.student_utr_number || "").trim()) && amountPaid > 0);
+    const claimedAmount = roundUpCurrency(
+      bill.ebl_claimed_amount !== undefined ? bill.ebl_claimed_amount : bill.amount_paid || 0
+    );
+    const differenceAmount = roundUpCurrency(
+      bill.ebl_difference_amount !== undefined
+        ? bill.ebl_difference_amount
+        : Math.max(totalAmount - claimedAmount, 0)
+    );
+    const studentPaidAmount = roundUpCurrency(bill.ebl_student_paid_amount || 0);
+    const remainingBalance = Math.max(
+      roundUpCurrency(
+        bill.ebl_remaining_balance !== undefined
+          ? bill.ebl_remaining_balance
+          : differenceAmount - studentPaidAmount
+      ),
+      0
+    );
+    const hasUniversityClaim = claimedAmount > 0;
+    const hasScholarshipOffset =
+      differenceAmount < totalAmount ||
+      bill.payment_status === "partial_scholarship_received" ||
+      bill.payment_status === "partial_university_claim_received" ||
+      hasUniversityClaim;
     const manualFine = 0;
     const liveFine = 0;
-    const totalPayable = 0;
+    const totalPayable = remainingBalance;
+    const paymentStatus =
+      remainingBalance <= 0
+        ? "paid"
+        : hasUniversityClaim
+          ? "partial_university_claim_received"
+          : hasScholarshipOffset
+            ? "partial_scholarship_received"
+            : "ebl";
 
     if (typeof bill.toObject === "function") {
       const plain = bill.toObject();
@@ -56,11 +120,16 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
         fine: liveFine,
         manual_fine: manualFine,
         late_fine: 0,
-        amount_paid: amountPaid,
-        payment_status: hasClaimSettlement ? "paid" : "ebl",
+        amount_paid: roundUpCurrency(claimedAmount + studentPaidAmount),
+        payment_status: paymentStatus,
         total_payable: totalPayable,
-        outstanding_amount: 0,
+        outstanding_amount: remainingBalance,
+        ebl_claimed_amount: claimedAmount,
+        ebl_difference_amount: differenceAmount,
+        ebl_student_paid_amount: studentPaidAmount,
+        ebl_remaining_balance: remainingBalance,
         student_utr_number: plain.student_utr_number || "",
+        ...absenceImpact,
       };
     }
 
@@ -70,11 +139,16 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
       fine: liveFine,
       manual_fine: manualFine,
       late_fine: 0,
-      amount_paid: amountPaid,
-      payment_status: hasClaimSettlement ? "paid" : "ebl",
+      amount_paid: roundUpCurrency(claimedAmount + studentPaidAmount),
+      payment_status: paymentStatus,
       total_payable: totalPayable,
-      outstanding_amount: 0,
+      outstanding_amount: remainingBalance,
+      ebl_claimed_amount: claimedAmount,
+      ebl_difference_amount: differenceAmount,
+      ebl_student_paid_amount: studentPaidAmount,
+      ebl_remaining_balance: remainingBalance,
       student_utr_number: bill.student_utr_number || "",
+      ...absenceImpact,
     };
   }
 
@@ -113,11 +187,12 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
       manual_fine: manualFine,
       late_fine: lateFine,
       amount_paid: amountPaid,
-      payment_status: currentStatus,
-      total_payable: totalPayable,
-      outstanding_amount: outstanding,
-      student_utr_number: plain.student_utr_number || "",
-    };
+        payment_status: currentStatus,
+        total_payable: totalPayable,
+        outstanding_amount: outstanding,
+        student_utr_number: plain.student_utr_number || "",
+        ...absenceImpact,
+      };
   }
 
   return {
@@ -131,6 +206,7 @@ const applyLiveBillState = (bill, currentDate = new Date()) => {
     total_payable: totalPayable,
     outstanding_amount: outstanding,
     student_utr_number: bill.student_utr_number || "",
+    ...absenceImpact,
   };
 };
 
@@ -139,6 +215,8 @@ module.exports = {
   FIRST_FINE_RATE,
   SECOND_FINE_RATE,
   roundUpCurrency,
+  roundTwoDecimals,
   calculateDynamicFine,
+  getAbsenceImpact,
   applyLiveBillState,
 };

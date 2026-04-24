@@ -149,6 +149,7 @@ export function CaretakerPaymentsPage() {
           { key: "payable", label: "Payable", render: (row) => formatCurrency((row.total_amount || 0) + (row.fine || 0)) },
           { key: "amount_paid", label: "Paid", render: (row) => formatCurrency(row.amount_paid || 0) },
           { key: "due_date", label: "Due Date", render: (row) => formatDate(row.due_date) },
+          { key: "student_payment_made_date", label: "Student Date", render: (row) => formatDate(row.student_payment_made_date) },
           {
             key: "student_utr_number",
             label: "Student UTR",

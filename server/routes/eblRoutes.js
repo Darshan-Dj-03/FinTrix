@@ -8,6 +8,7 @@ const {
   listReports,
   createPeriod,
   updatePeriod,
+  verifyPeriod,
   getStudentEblStatus,
   generateReport,
   submitReport,
@@ -19,14 +20,22 @@ const router = express.Router();
 
 router.get("/student", protect, checkRole("student"), getStudentEblStatus);
 router.get("/periods", protect, checkRole("student", "caretaker", "warden", "admin", "dean"), listPeriods);
-router.post("/periods", protect, checkRole("caretaker"), createPeriod);
+router.post("/periods", protect, checkRole("student", "caretaker"), createPeriod);
 router.put(
   "/periods/:id",
+  protect,
+  checkRole("student", "caretaker"),
+  [param("id").isMongoId().withMessage("Invalid EBL period id")],
+  validateRequest,
+  updatePeriod
+);
+router.put(
+  "/periods/:id/verify",
   protect,
   checkRole("caretaker"),
   [param("id").isMongoId().withMessage("Invalid EBL period id")],
   validateRequest,
-  updatePeriod
+  verifyPeriod
 );
 
 router.get("/reports", protect, checkRole("caretaker", "warden", "admin", "dean"), listReports);

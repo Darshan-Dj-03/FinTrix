@@ -284,8 +284,22 @@ const drawKeyValueTable = (doc, { title, rows, redrawHeader }) => {
 const drawSummaryPanel = (doc, { title, items, redrawHeader }) => {
   const left = doc.page.margins.left;
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const lineHeight = 18;
-  const boxHeight = 34 + items.length * lineHeight;
+  const labelWidth = width * 0.44;
+  const valueWidth = width * 0.44;
+  const rowGap = 6;
+  const rowHeights = items.map((item) => {
+    const labelHeight = doc
+      .font("Times-Roman")
+      .fontSize(10)
+      .heightOfString(String(item.label || "-"), { width: labelWidth });
+    const valueHeight = doc
+      .font("Times-Bold")
+      .fontSize(10)
+      .heightOfString(String(item.value || "-"), { width: valueWidth, align: "right" });
+    return Math.max(labelHeight, valueHeight);
+  });
+  const contentHeight = rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, items.length - 1) * rowGap;
+  const boxHeight = 44 + contentHeight;
   ensureSpace(doc, boxHeight + 8, redrawHeader);
 
   const y = doc.y;
@@ -294,16 +308,17 @@ const drawSummaryPanel = (doc, { title, items, redrawHeader }) => {
   doc.restore();
 
   doc.font("Times-Bold").fontSize(12).fillColor("#0f172a").text(title, left + 14, y + 12);
-  let currentY = y + 32;
-  items.forEach((item) => {
+  let currentY = y + 36;
+  items.forEach((item, index) => {
+    const rowHeight = rowHeights[index];
     doc.font("Times-Roman").fontSize(10).fillColor("#334155").text(item.label, left + 14, currentY, {
-      width: width * 0.58,
+      width: labelWidth,
     });
-    doc.font("Times-Bold").fontSize(10).fillColor("#0f172a").text(item.value, left + width - 170, currentY, {
-      width: 150,
+    doc.font("Times-Bold").fontSize(10).fillColor("#0f172a").text(item.value, left + width - valueWidth - 14, currentY, {
+      width: valueWidth,
       align: "right",
     });
-    currentY += lineHeight;
+    currentY += rowHeight + rowGap;
   });
 
   doc.y = y + boxHeight + 10;

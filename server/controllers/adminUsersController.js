@@ -83,7 +83,6 @@ const createOrUpdateStudentProfile = async ({
   isActive,
   isTemporaryId,
   isEBL,
-  studentClass,
 }) => {
   const normalizedStudentId = normalizeStudentId(studentId);
 
@@ -117,7 +116,6 @@ const createOrUpdateStudentProfile = async ({
     existingStudent.isTemporaryId = Boolean(isTemporaryId);
     existingStudent.isEBL = Boolean(isEBL);
     existingStudent.eblCategory = "";
-    existingStudent.studentClass = String(studentClass || "").trim();
     await existingStudent.save({ session });
     return existingStudent;
   }
@@ -132,7 +130,6 @@ const createOrUpdateStudentProfile = async ({
         isTemporaryId: Boolean(isTemporaryId),
         isEBL: Boolean(isEBL),
         eblCategory: "",
-        studentClass: String(studentClass || "").trim(),
       },
     ],
     { session }
@@ -153,7 +150,6 @@ const createManagedUser = async (req, res) => {
       gender,
       studentIdMode,
       isEBL,
-      studentClass,
     } = req.body;
 
     if (!name || !email || !password || !role) {
@@ -234,7 +230,6 @@ const createManagedUser = async (req, res) => {
           isActive: true,
           isTemporaryId,
           isEBL,
-          studentClass,
         });
       }
 
@@ -282,7 +277,7 @@ const listUsers = async (req, res) => {
       .lean();
 
     const students = await Student.find({ userId: { $in: users.map((user) => user._id) } })
-      .select("userId studentId gender isEBL eblCategory studentClass isActive isTemporaryId")
+      .select("userId studentId gender isEBL eblCategory isActive isTemporaryId")
       .lean();
 
     const studentMap = new Map(students.map((student) => [String(student.userId), student]));
@@ -318,7 +313,6 @@ const updateManagedUser = async (req, res) => {
       gender,
       studentIdMode,
       isEBL,
-      studentClass,
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -421,7 +415,6 @@ const updateManagedUser = async (req, res) => {
           isActive: user.isActive,
           isTemporaryId: wantsManualId ? false : studentProfile?.isTemporaryId ?? !studentId,
           isEBL: isEBL !== undefined ? isEBL : studentProfile?.isEBL,
-          studentClass: studentClass !== undefined ? studentClass : studentProfile?.studentClass,
         });
       } else if (studentProfile) {
         if (user.email) {

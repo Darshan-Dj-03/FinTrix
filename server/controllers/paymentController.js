@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Payment = require("../models/Payment");
 const MessBill = require("../models/MessBill");
 const Student = require("../models/Student");
-const Ledger = require("../models/Ledger");
+const EblPeriod = require("../models/EblPeriod");
 const {
   notifyStudentPaymentRecorded,
   notifyStudentPaymentRecordedInApp,
@@ -15,6 +15,7 @@ const logger = require("../utils/logger");
 
 const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 const buildBillPaymentKey = (billId) => `bill:${String(billId)}`;
+const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 const populatePayment = [
   { path: "studentId", select: "studentId gender isEBL isActive", populate: { path: "userId", select: "name" } },
@@ -62,6 +63,27 @@ const ensureBillAccess = async (billId, user) => {
   return { bill };
 };
 
+const hasEblClaimRecorded = (bill) =>
+  Number(bill?.ebl_claimed_amount || 0) > 0 || Number(bill?.ebl_difference_amount || 0) > 0;
+
+const rebuildEblPeriodTotals = (period) => {
+  period.totals = {
+    totalMessBill: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.messBillAmount || 0), 0)),
+    totalScholarship: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.goiAmount || 0), 0)),
+    totalClaimedAmount: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0)),
+    totalDifference: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.differenceAmount || 0), 0)),
+    totalStudentPaid: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.studentPaidAmount || 0), 0)),
+    totalRemainingBalance: roundMoney(period.monthlyDetails.reduce((sum, item) => sum + Number(item.remainingBalance || 0), 0)),
+    totalClaimAmount: roundMoney(
+      Math.max(
+        period.monthlyDetails.reduce((sum, item) => sum + Number(item.differenceAmount || 0), 0) -
+          period.monthlyDetails.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0),
+        0
+      )
+    ),
+  };
+};
+
 const recordPayment = async (req, res) => {
   try {
     const { billId, paymentMethod = "upi", paymentMadeDate } = req.body;
@@ -77,15 +99,25 @@ const recordPayment = async (req, res) => {
     }
 
     const bill = access.bill;
-    if (bill.is_ebl_student || bill.payment_status === "ebl") {
+    const normalizedRequestedMethod = String(paymentMethod).toLowerCase();
+    const paymentTimestamp = paymentMadeDate ? new Date(paymentMadeDate) : new Date();
+
+    if (Number.isNaN(paymentTimestamp.getTime())) {
+      return res.status(400).json({ success: false, message: "paymentMadeDate must be a valid date." });
+    }
+
+    const liveAccessBill = applyLiveBillState(bill, paymentTimestamp);
+    if (bill.is_ebl_student && !hasEblClaimRecorded(liveAccessBill)) {
       return res.status(400).json({
         success: false,
-        message: "EBL reimbursement bills cannot be recorded in the regular payment section.",
+        message: "EBL claim details must be submitted first before recording the remaining balance payment.",
       });
     }
     const billPaymentKey = buildBillPaymentKey(bill._id);
-    const payableTotal = Number(applyLiveBillState(bill).total_payable || 0);
-    const outstandingBefore = Math.max(payableTotal - Number(bill.amount_paid || 0), 0);
+    const payableTotal = Number(liveAccessBill.total_payable || 0);
+    const outstandingBefore = bill.is_ebl_student
+      ? Math.max(payableTotal, 0)
+      : Math.max(payableTotal - Number(bill.amount_paid || 0), 0);
 
     if (outstandingBefore <= 0) {
       const latestPayment = await Payment.findOne({ billId }).sort({ createdAt: -1 }).populate(populatePayment);
@@ -96,14 +128,13 @@ const recordPayment = async (req, res) => {
       });
     }
 
-    if (!["cash", "upi"].includes(String(paymentMethod).toLowerCase())) {
+    if (!["cash", "upi"].includes(normalizedRequestedMethod)) {
       return res.status(400).json({
         success: false,
         message: "paymentMethod must be either cash or upi.",
       });
     }
 
-    const normalizedRequestedMethod = String(paymentMethod).toLowerCase();
     const requestedBillUtr = String(bill.student_utr_number || "").trim();
     if (normalizedRequestedMethod === "upi" && !requestedBillUtr) {
       return res.status(400).json({
@@ -138,9 +169,17 @@ const recordPayment = async (req, res) => {
         throw error;
       }
 
-      const liveBillState = applyLiveBillState(transactionalBill);
+      const liveBillState = applyLiveBillState(transactionalBill, paymentTimestamp);
+      if (transactionalBill.is_ebl_student && !hasEblClaimRecorded(liveBillState)) {
+        const error = new Error("EBL claim details must be submitted first before recording the remaining balance payment.");
+        error.status = 400;
+        throw error;
+      }
+
       const payable = Number(liveBillState.total_payable || 0);
-      const outstanding = Math.max(payable - Number(transactionalBill.amount_paid || 0), 0);
+      const outstanding = transactionalBill.is_ebl_student
+        ? Math.max(payable, 0)
+        : Math.max(payable - Number(transactionalBill.amount_paid || 0), 0);
 
       if (outstanding <= 0) {
         const latestPayment = await Payment.findOne({ billId })
@@ -151,27 +190,17 @@ const recordPayment = async (req, res) => {
       }
 
       const appliedAmount = outstanding;
-      const updatedPaidAmount = Number(transactionalBill.amount_paid || 0) + appliedAmount;
-      const paymentStatus =
-        updatedPaidAmount >= payable ? "paid" : updatedPaidAmount > 0 ? "partial" : "pending";
-      const normalizedPaymentMethod = String(paymentMethod).toLowerCase();
-      const paymentTimestamp = paymentMadeDate ? new Date(paymentMadeDate) : new Date();
-
-      if (Number.isNaN(paymentTimestamp.getTime())) {
-        const error = new Error("paymentMadeDate must be a valid date.");
-        error.status = 400;
-        throw error;
-      }
+      const isEblBill = Boolean(transactionalBill.is_ebl_student);
 
       const billUtrValue = String(transactionalBill.student_utr_number || "").trim();
-      if (normalizedPaymentMethod === "upi" && !billUtrValue) {
+      if (normalizedRequestedMethod === "upi" && !billUtrValue) {
         const error = new Error("Student UTR is required before recording a UPI payment.");
         error.status = 400;
         throw error;
       }
 
       const resolvedUtrNumber =
-        normalizedPaymentMethod === "upi" ? billUtrValue : billUtrValue || DEFAULT_UTR_MESSAGE;
+        normalizedRequestedMethod === "upi" ? billUtrValue : billUtrValue || DEFAULT_UTR_MESSAGE;
 
       const [payment] = await Payment.create(
         [
@@ -181,7 +210,7 @@ const recordPayment = async (req, res) => {
             hostelId: transactionalBill.hostelId,
             month: transactionalBill.month,
             amount: appliedAmount,
-            paymentMethod: normalizedPaymentMethod,
+            paymentMethod: normalizedRequestedMethod,
             utrNumber: resolvedUtrNumber,
             paymentMadeDate: paymentTimestamp,
             status: "paid",
@@ -196,18 +225,51 @@ const recordPayment = async (req, res) => {
 
       transactionalBill.fine = Number(liveBillState.fine || 0);
       transactionalBill.manual_fine = Number(liveBillState.manual_fine || transactionalBill.manual_fine || 0);
-      transactionalBill.amount_paid = updatedPaidAmount;
-      transactionalBill.payment_status = paymentStatus;
-      await transactionalBill.save({ session });
+      let paymentStatus = "paid";
 
-      const ledger = await Ledger.findOne({ hostelId: transactionalBill.hostelId, month: transactionalBill.month }).session(session);
-      if (ledger) {
-        ledger.totalCollected = Number(ledger.totalCollected || 0) + appliedAmount;
-        ledger.outstanding = Math.max(Number(ledger.totalBilled || 0) - ledger.totalCollected, 0);
-        ledger.closingBalance =
-          Number(ledger.openingBalance || 0) + ledger.totalCollected - Number(ledger.totalExpenses || 0);
-        await ledger.save({ session });
+      if (isEblBill) {
+        const updatedStudentPaidAmount = Number(transactionalBill.ebl_student_paid_amount || 0) + appliedAmount;
+        const claimedAmount = Number(transactionalBill.ebl_claimed_amount || 0);
+        const differenceAmount = Number(transactionalBill.ebl_difference_amount || 0);
+        const updatedRemainingBalance = Math.max(differenceAmount - claimedAmount - updatedStudentPaidAmount, 0);
+        paymentStatus =
+          updatedRemainingBalance <= 0
+            ? "paid"
+            : claimedAmount > 0
+              ? "partial_university_claim_received"
+              : "partial_scholarship_received";
+
+        transactionalBill.ebl_student_paid_amount = updatedStudentPaidAmount;
+        transactionalBill.ebl_remaining_balance = updatedRemainingBalance;
+        transactionalBill.amount_paid = claimedAmount + updatedStudentPaidAmount;
+        transactionalBill.payment_status = paymentStatus;
+
+        const relatedPeriod = await EblPeriod.findOne({
+          "monthlyDetails.billId": transactionalBill._id,
+        }).session(session);
+
+        if (relatedPeriod) {
+          const periodDetail = relatedPeriod.monthlyDetails.find(
+            (item) => String(item.billId) === String(transactionalBill._id)
+          );
+
+          if (periodDetail) {
+            periodDetail.studentPaidAmount = updatedStudentPaidAmount;
+            periodDetail.remainingBalance = updatedRemainingBalance;
+            periodDetail.paymentStatus = paymentStatus;
+            rebuildEblPeriodTotals(relatedPeriod);
+            await relatedPeriod.save({ session });
+          }
+        }
+      } else {
+        const updatedPaidAmount = Number(transactionalBill.amount_paid || 0) + appliedAmount;
+        paymentStatus =
+          updatedPaidAmount >= Number(liveBillState.total_payable || 0) ? "paid" : updatedPaidAmount > 0 ? "partial" : "pending";
+        transactionalBill.amount_paid = updatedPaidAmount;
+        transactionalBill.payment_status = paymentStatus;
       }
+
+      await transactionalBill.save({ session });
 
       await createAuditLog({
         action: "PAYMENT_RECORDED",
@@ -221,7 +283,7 @@ const recordPayment = async (req, res) => {
           hostelId: transactionalBill.hostelId,
           amount: appliedAmount,
           paymentStatus,
-          paymentMethod: normalizedPaymentMethod,
+          paymentMethod: normalizedRequestedMethod,
           paymentMadeDate: paymentTimestamp,
           studentUtrNumber: resolvedUtrNumber,
         },

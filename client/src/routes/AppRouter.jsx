@@ -26,13 +26,14 @@ const CaretakerMessBillPerStudentPage = lazy(() => import("../pages/caretaker/Ca
 const CaretakerPaymentsPage = lazy(() => import("../pages/caretaker/CaretakerPaymentsPage").then((module) => ({ default: module.CaretakerPaymentsPage })));
 const CaretakerChargesPage = lazy(() => import("../pages/caretaker/CaretakerChargesPage").then((module) => ({ default: module.CaretakerChargesPage })));
 const CaretakerReportsPage = lazy(() => import("../pages/caretaker/CaretakerReportsPage").then((module) => ({ default: module.CaretakerReportsPage })));
+const CaretakerStudentSignupPage = lazy(() => import("../pages/caretaker/CaretakerStudentSignupPage").then((module) => ({ default: module.CaretakerStudentSignupPage })));
 const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage").then((module) => ({ default: module.AdminOverviewPage })));
 const AdminHostelsPage = lazy(() => import("../pages/admin/AdminHostelsPage").then((module) => ({ default: module.AdminHostelsPage })));
 const AdminExpensesPage = lazy(() => import("../pages/admin/AdminExpensesPage").then((module) => ({ default: module.AdminExpensesPage })));
 const AdminConsumptionPage = lazy(() => import("../pages/admin/AdminConsumptionPage").then((module) => ({ default: module.AdminConsumptionPage })));
 const AdminApprovalsPage = lazy(() => import("../pages/admin/AdminApprovalsPage").then((module) => ({ default: module.AdminApprovalsPage })));
 const AdminAnalyticsPage = lazy(() => import("../pages/admin/AdminAnalyticsPage").then((module) => ({ default: module.AdminAnalyticsPage })));
-const AdminLedgerPage = lazy(() => import("../pages/admin/AdminLedgerPage").then((module) => ({ default: module.AdminLedgerPage })));
+const AdminStudentSignupPage = lazy(() => import("../pages/admin/AdminStudentSignupPage").then((module) => ({ default: module.AdminStudentSignupPage })));
 const AdminUsersPage = lazy(() => import("../pages/admin/AdminUsersPage").then((module) => ({ default: module.AdminUsersPage })));
 const AdminStudentsPage = lazy(() => import("../pages/admin/AdminStudentsPage").then((module) => ({ default: module.AdminStudentsPage })));
 
@@ -103,19 +104,20 @@ export function AppRouter() {
               <Route path="/caretaker/payments" element={<CaretakerPaymentsPage />} />
               <Route path="/caretaker/charges" element={<CaretakerChargesPage />} />
               <Route path="/caretaker/reports" element={<CaretakerReportsPage />} />
+              <Route path="/caretaker/student-signups" element={<CaretakerStudentSignupPage />} />
             </Route>
 
             <Route element={<RoleBasedRoute allowedRoles={["admin", "dean", "warden"]} />}>
               <Route path="/admin" element={<AdminOverviewPage />} />
               <Route path="/admin/approvals" element={<AdminApprovalsPage />} />
               <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
-              <Route path="/admin/ledger" element={<AdminLedgerPage />} />
             </Route>
 
             <Route element={<RoleBasedRoute allowedRoles={["admin"]} />}>
               <Route path="/admin/hostels" element={<AdminHostelsPage />} />
               <Route path="/admin/expenses" element={<AdminExpensesPage />} />
               <Route path="/admin/consumption" element={<AdminConsumptionPage />} />
+              <Route path="/admin/student-signups" element={<AdminStudentSignupPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/students" element={<AdminStudentsPage />} />
             </Route>

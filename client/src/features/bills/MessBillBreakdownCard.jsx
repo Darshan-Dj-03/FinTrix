@@ -7,12 +7,12 @@ import {
   getGrandTotal,
 } from "./messBillBreakdown";
 
-function LineItem({ label, value, emphasis = false }) {
+function LineItem({ label, value, emphasis = false, formatter = formatCurrency }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0">
       <span className="text-sm text-slate-500">{label}</span>
       <span className={emphasis ? "text-sm font-semibold text-slate-900" : "text-sm font-medium text-slate-700"}>
-        {formatCurrency(value)}
+        {formatter(value)}
       </span>
     </div>
   );
@@ -69,6 +69,8 @@ export function MessBillBreakdownCard({ bill, title = "Bill breakdown", compact 
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-600">Final Calculation</p>
           <div className="mt-5 space-y-1">
+            <LineItem label="Absent Days" value={Number(bill.absent_days || 0)} formatter={(value) => String(value)} />
+            <LineItem label="Absence Deduction" value={bill.absence_deduction || 0} />
             <LineItem label="Mess Bill" value={bill.base_mess} />
             <LineItem label="Additional Food Charges" value={foodTotal} />
             <LineItem label="Static Charges" value={dynamicTotal} />

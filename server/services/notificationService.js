@@ -97,7 +97,7 @@ const getRoleAwareNotificationLink = (role, category, approverRole = "") => {
     case "payment_recorded":
       if (role === "student") return "/student/payments";
       if (role === "caretaker") return "/caretaker/payments";
-      if (["warden", "dean", "admin"].includes(role)) return "/admin/ledger";
+      if (["warden", "dean", "admin"].includes(role)) return "/admin/analytics";
       return getDefaultLinkByRole(role);
     case "payment_updated":
       if (role === "student") return "/student/payments";

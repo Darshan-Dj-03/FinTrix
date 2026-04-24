@@ -123,7 +123,13 @@ export function CaretakerReportsPage() {
     onError: (error) => toast.error(error?.response?.data?.message || "Unable to submit report."),
   });
   const getEblReportLabel = (row) =>
-    row.reportType === "pre_receipt" ? "EBL Pre-Receipt Report" : "EBL Month-wise Calculation Report";
+    row.reportType === "pre_receipt"
+      ? "EBL Pre-Receipt Report"
+      : row.reportType === "university_claim"
+        ? "EBL University Claim Report"
+        : row.reportType === "university_claim_month_wise"
+          ? "EBL University Claim Month-wise Report"
+        : "EBL Month-wise Calculation Report";
 
   const submitNamedReportMutation = useMutation({
     mutationFn: async ({ reportType, month: targetMonth }) => {
@@ -280,7 +286,11 @@ export function CaretakerReportsPage() {
             label: "Details",
             render: (row) =>
               row.report_type === "ebl_report"
-                ? `${row.totalStudents || 0} students | Difference: ${formatCurrency(row.totalDifference)}`
+                ? row.reportType === "university_claim"
+                  ? `${row.totalStudents || 0} students | Claim: ${formatCurrency(row.totalUniversityClaim)} | Balance: ${formatCurrency(row.totalRemainingBalance)}`
+                  : row.reportType === "university_claim_month_wise"
+                    ? `${row.totalStudents || 0} students | Claim: ${formatCurrency(row.totalUniversityClaim)} | Balance: ${formatCurrency(row.totalRemainingBalance)}`
+                  : `${row.totalStudents || 0} students | Difference: ${formatCurrency(row.totalDifference)}`
               :
               row.report_type === "monthly_total_expenditure"
                 ? `Total: ${formatCurrency(row.total_expenditure)} | Per Day: ${formatCurrency(row.mess_bill_per_day)}`

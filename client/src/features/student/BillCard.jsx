@@ -28,10 +28,18 @@ export function BillCard({ bill, onDownload }) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <div className="panel-soft p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Base Mess</p>
           <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.base_mess)}</p>
+        </div>
+        <div className="panel-soft p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Absent Days</p>
+          <p className="mt-2 text-lg font-semibold text-slate-800">{Number(bill.absent_days || 0)}</p>
+        </div>
+        <div className="panel-soft p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Absence Deduction</p>
+          <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.absence_deduction || 0)}</p>
         </div>
         <div className="panel-soft p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Utilities + Labour</p>
@@ -48,6 +56,23 @@ export function BillCard({ bill, onDownload }) {
           <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.amount_paid || 0)}</p>
         </div>
       </div>
+
+      {bill.is_ebl_student ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="panel-soft p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Claimed Amount</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_claimed_amount || 0)}</p>
+          </div>
+          <div className="panel-soft p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Difference Amount</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_difference_amount || 0)}</p>
+          </div>
+          <div className="panel-soft p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Remaining Balance</p>
+            <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.ebl_remaining_balance || 0)}</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <MessBillBreakdownCard bill={bill} title="Why this bill amount was charged" compact />

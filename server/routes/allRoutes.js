@@ -89,10 +89,6 @@ app.delete('/charges/:chargeId', protect, checkRole('admin', 'caretaker'), delet
 const { getFullReport } = require('./controllers/reportController');
 app.get('/report/full/:month', protect, checkRole('admin', 'caretaker'), getFullReport);
 
-// PHASE 15: Ledger Routes
-const { getLedger, createLedger } = require('./controllers/ledgerController');
-app.get('/ledger/:month', protect, checkRole('admin', 'caretaker'), getLedger);
-app.post('/ledger/create/:month', protect, checkRole('admin'), createLedger);
 */
 
 /**

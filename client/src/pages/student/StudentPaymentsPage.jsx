@@ -35,7 +35,7 @@ const isMonthInsidePeriod = (month, fromMonth, toMonth) => {
 export function StudentPaymentsPage() {
   const studentProfile = useAuthStore((state) => state.studentProfile);
   const [month, setMonth] = useState(CURRENT_MONTH);
-  const form = useForm({ defaultValues: { utrNumber: "" } });
+  const form = useForm({ defaultValues: { utrNumber: "", paymentMadeDate: "" } });
 
   const billQuery = useQuery({
     queryKey: ["student-payment-bill", studentProfile?._id, month],
@@ -55,17 +55,20 @@ export function StudentPaymentsPage() {
   useEffect(() => {
     form.reset({
       utrNumber: billQuery.data?.data?.student_utr_number || "",
+      paymentMadeDate: billQuery.data?.data?.student_payment_made_date
+        ? new Date(billQuery.data.data.student_payment_made_date).toISOString().slice(0, 10)
+        : "",
     });
-  }, [billQuery.data?.data?.student_utr_number, form]);
+  }, [billQuery.data?.data?.student_utr_number, billQuery.data?.data?.student_payment_made_date, form]);
 
   const updateStudentPaymentInfoMutation = useMutation({
     mutationFn: ({ billId, payload }) => billApi.updateStudentPaymentInfo(billId, payload),
     onSuccess: () => {
-      toast.success("UTR details updated.");
+      toast.success("Payment details updated.");
       billQuery.refetch();
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || "Unable to update UTR details.");
+      toast.error(error?.response?.data?.message || "Unable to update payment details.");
     },
   });
 
@@ -119,8 +122,8 @@ export function StudentPaymentsPage() {
         title="Payment history"
         description={
           isEblBill
-            ? "This month is settled through the EBL workflow. Students cannot edit the UTR here because the caretaker records the reimbursement UTR for the full EBL period."
-            : "Keep your payment UTR updated here so the caretaker can verify it against the bill."
+            ? "This month is settled through the EBL workflow. Submit GOI amount, duration, and scholarship UTR in the EBL section, while the caretaker verifies any remaining balance payment."
+            : "Keep your payment UTR and payment date updated here so the caretaker can verify it against the bill."
         }
         action={
           <div className="w-full max-w-sm">
@@ -132,7 +135,7 @@ export function StudentPaymentsPage() {
       <div className="panel p-6">
         {isEblBill ? (
           <>
-            <h3 className="section-title">UTR update disabled for EBL month</h3>
+            <h3 className="section-title">EBL payment details are managed in the EBL section</h3>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div>
                 <label className="field-label">Bill month</label>
@@ -140,19 +143,27 @@ export function StudentPaymentsPage() {
               </div>
               <div>
                 <label className="field-label">Current payable</label>
-                <Input readOnly value={formatCurrency(0)} />
+                <Input readOnly value={formatCurrency(bill?.ebl_remaining_balance || 0)} />
+              </div>
+              <div>
+                <label className="field-label">Claimed amount</label>
+                <Input readOnly value={formatCurrency(bill?.ebl_claimed_amount || 0)} />
+              </div>
+              <div>
+                <label className="field-label">Difference amount</label>
+                <Input readOnly value={formatCurrency(bill?.ebl_difference_amount || 0)} />
               </div>
               <div className="md:col-span-2">
                 <label className="field-label">EBL period UTR</label>
                 <Input
                   readOnly
                   disabled
-                  value={matchingEblPeriod?.periodUtr || bill?.student_utr_number || "Recorded by caretaker after EBL settlement"}
+                  value={matchingEblPeriod?.periodUtr || bill?.student_utr_number || "Submit scholarship UTR from the EBL section"}
                 />
               </div>
             </div>
             <p className="mt-4 text-sm font-medium text-slate-500">
-              Regular student UTR update is disabled for EBL-applicable months. The caretaker records the reimbursement UTR for this period, and that value is shown above.
+              Use the EBL page to submit scholarship details. The caretaker processes the remaining balance after reviewing the submitted claim details.
             </p>
           </>
         ) : (
@@ -165,11 +176,14 @@ export function StudentPaymentsPage() {
 
               updateStudentPaymentInfoMutation.mutate({
                 billId: bill._id,
-                payload: { utrNumber: values.utrNumber.trim() },
+                payload: {
+                  utrNumber: values.utrNumber.trim(),
+                  paymentMadeDate: values.paymentMadeDate || null,
+                },
               });
             })}
           >
-            <h3 className="section-title">Update your UTR</h3>
+            <h3 className="section-title">Update your payment details</h3>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div>
                 <label className="field-label">Bill month</label>
@@ -178,6 +192,10 @@ export function StudentPaymentsPage() {
               <div>
                 <label className="field-label">Current payable</label>
                 <Input readOnly value={formatCurrency((bill?.total_amount || 0) + (bill?.fine || 0))} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="field-label">Payment made date</label>
+                <Input type="date" {...form.register("paymentMadeDate")} />
               </div>
               <div className="md:col-span-2">
                 <label className="field-label">UTR number</label>

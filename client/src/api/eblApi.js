@@ -21,6 +21,10 @@ export const eblApi = {
     const { data } = await apiClient.put(`/ebl/periods/${id}`, payload);
     return data;
   },
+  verifyPeriod: async (id) => {
+    const { data } = await apiClient.put(`/ebl/periods/${id}/verify`);
+    return data;
+  },
   generateReport: async (payload) => {
     const { data } = await apiClient.post("/ebl/reports", payload);
     return data;

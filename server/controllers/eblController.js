@@ -4,6 +4,7 @@ const Student = require("../models/Student");
 const MessBill = require("../models/MessBill");
 const EblPeriod = require("../models/EblPeriod");
 const EblReport = require("../models/EblCategoryReport");
+const Report = require("../models/Report");
 const { runInTransaction } = require("../utils/transaction");
 const { createAuditLog } = require("../services/auditService");
 const {
@@ -29,7 +30,7 @@ const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 const POPULATE_EBL_PERIOD = [
   {
     path: "studentId",
-    select: "studentId gender isEBL isActive studentClass",
+    select: "studentId gender isEBL isActive",
     populate: {
       path: "userId",
       select: "name username email hostelId isActive",
@@ -49,6 +50,8 @@ const POPULATE_EBL_PERIOD = [
 const REPORT_TYPE_LABELS = {
   pre_receipt: "EBL Pre-Receipt Report",
   month_wise: "EBL Month-wise Calculation Report",
+  university_claim: "EBL University Claim Report",
+  university_claim_month_wise: "EBL University Claim Month-wise Report",
 };
 
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -78,7 +81,6 @@ const filterMonthsBySelectedRange = (months = [], fromMonth, toMonth) => {
 const buildComputedMonthlyDetails = (period, fromMonth = null, toMonth = null) => {
   const allMonths = validateMonthRange(period.fromMonth, period.toMonth);
   const selectedMonths = filterMonthsBySelectedRange(allMonths, fromMonth, toMonth);
-  const monthlyShare = allMonths.length ? Number(period.monthlyGoiAmount || 0) / allMonths.length : 0;
   const storedDetails = new Map(
     (period.monthlyDetails || []).map((detail) => [detail.month, detail])
   );
@@ -86,14 +88,37 @@ const buildComputedMonthlyDetails = (period, fromMonth = null, toMonth = null) =
   return selectedMonths.map((month) => {
     const stored = storedDetails.get(month);
     const messBillAmount = roundMoney(Number(stored?.messBillAmount || 0));
-    const goiAmount = roundMoney(monthlyShare);
+    const goiAmount = roundMoney(
+      stored?.goiAmount !== undefined ? Number(stored.goiAmount || 0) : 0
+    );
+    const shouldIgnoreLegacyClaimedAmount =
+      period.universityClaimAmount === undefined &&
+      stored?.claimedAmount !== undefined &&
+      roundMoney(Number(stored?.claimedAmount || 0)) === goiAmount;
+    const claimedAmount = roundMoney(
+      shouldIgnoreLegacyClaimedAmount ? 0 : Number(stored?.claimedAmount || 0)
+    );
     const differenceAmount = roundMoney(messBillAmount - goiAmount);
+    const studentPaidAmount = roundMoney(Number(stored?.studentPaidAmount || 0));
+    const remainingBalance = roundMoney(Math.max(differenceAmount - claimedAmount - studentPaidAmount, 0));
+    const paymentStatus =
+      remainingBalance <= 0
+        ? "paid"
+        : claimedAmount > 0
+          ? "partial_university_claim_received"
+          : goiAmount > 0
+            ? "partial_scholarship_received"
+            : stored?.paymentStatus || "ebl";
 
     return {
       month,
       messBillAmount,
       goiAmount,
+      claimedAmount,
       differenceAmount,
+      studentPaidAmount,
+      remainingBalance,
+      paymentStatus,
       billId: stored?.billId || null,
     };
   });
@@ -103,15 +128,166 @@ const buildPeriodTotals = (monthlyDetails = [], goiAmount = 0) => {
   const totalMessBill = roundMoney(
     monthlyDetails.reduce((sum, item) => sum + Number(item.messBillAmount || 0), 0)
   );
-  const totalScholarship = roundMoney(Number(goiAmount || 0));
-  const totalDifference = roundMoney(totalMessBill - totalScholarship);
+  const totalScholarship = roundMoney(
+    monthlyDetails.reduce((sum, item) => sum + Number(item.goiAmount || 0), 0)
+  );
+  const totalClaimedAmount = roundMoney(
+    monthlyDetails.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0)
+  );
+  const totalDifference = roundMoney(
+    monthlyDetails.reduce((sum, item) => sum + Number(item.differenceAmount || 0), 0)
+  );
+  const totalStudentPaid = roundMoney(
+    monthlyDetails.reduce((sum, item) => sum + Number(item.studentPaidAmount || 0), 0)
+  );
+  const totalRemainingBalance = roundMoney(
+    monthlyDetails.reduce((sum, item) => sum + Number(item.remainingBalance || 0), 0)
+  );
 
   return {
     totalMessBill,
     totalScholarship,
+    totalClaimedAmount,
     totalDifference,
-    totalClaimAmount: roundMoney(Math.max(totalDifference, 0)),
+    totalStudentPaid,
+    totalRemainingBalance,
+    totalClaimAmount: roundMoney(Math.max(totalDifference - totalClaimedAmount, 0)),
   };
+};
+
+const allocateByWeights = (total, weights = []) => {
+  const normalizedTotal = roundMoney(Math.max(Number(total || 0), 0));
+  const normalizedWeights = weights.map((weight) => roundMoney(Math.max(Number(weight || 0), 0)));
+  const totalWeight = roundMoney(normalizedWeights.reduce((sum, value) => sum + value, 0));
+
+  if (!normalizedTotal || !totalWeight) {
+    return normalizedWeights.map(() => 0);
+  }
+
+  const cappedTotal = Math.min(normalizedTotal, totalWeight);
+  const allocations = normalizedWeights.map(() => 0);
+  let remainingTotal = cappedTotal;
+  let remainingWeight = totalWeight;
+
+  normalizedWeights.forEach((weight, index) => {
+    if (!weight || remainingTotal <= 0) {
+      return;
+    }
+
+    let share =
+      index === normalizedWeights.length - 1
+        ? remainingTotal
+        : roundMoney((remainingTotal * weight) / remainingWeight);
+
+    share = Math.min(share, weight, remainingTotal);
+    allocations[index] = share;
+    remainingTotal = roundMoney(remainingTotal - share);
+    remainingWeight = roundMoney(Math.max(remainingWeight - weight, 0));
+  });
+
+  if (remainingTotal > 0) {
+    for (let index = 0; index < allocations.length && remainingTotal > 0; index += 1) {
+      const capacity = roundMoney(normalizedWeights[index] - allocations[index]);
+      if (capacity <= 0) {
+        continue;
+      }
+      const extra = Math.min(capacity, remainingTotal);
+      allocations[index] = roundMoney(allocations[index] + extra);
+      remainingTotal = roundMoney(remainingTotal - extra);
+    }
+  }
+
+  return allocations;
+};
+
+const buildSettlementMap = (monthlySettlements = []) =>
+  new Map(
+    (Array.isArray(monthlySettlements) ? monthlySettlements : [])
+      .filter((item) => item && item.month)
+      .map((item) => [item.month, Math.max(roundMoney(Number(item.studentPaidAmount || 0)), 0)])
+  );
+
+const refreshMonthlyReportSnapshot = async ({ month, hostelId, session = null }) => {
+  const existingReportQuery = Report.findOne({ month, hostelId });
+  if (session) {
+    existingReportQuery.session(session);
+  }
+
+  const existingReport = await existingReportQuery;
+  if (!existingReport) {
+    return;
+  }
+
+  const billMatch = {
+    month,
+    hostelId: new mongoose.Types.ObjectId(hostelId),
+  };
+
+  const [[billedData], [collectedData], studentWiseSummary] = await Promise.all([
+    MessBill.aggregate([
+      { $match: billMatch },
+      { $group: { _id: null, total: { $sum: "$total_amount" } } },
+    ]).session(session),
+    MessBill.aggregate([
+      { $match: billMatch },
+      { $group: { _id: null, total: { $sum: "$amount_paid" } } },
+    ]).session(session),
+    MessBill.aggregate([
+      { $match: billMatch },
+      {
+        $lookup: {
+          from: "students",
+          localField: "studentId",
+          foreignField: "_id",
+          as: "student",
+        },
+      },
+      { $unwind: "$student" },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: 0,
+          studentId: "$student._id",
+          studentCode: "$student.studentId",
+          name: "$user.name",
+          billAmount: "$total_amount",
+          paymentStatus: "$payment_status",
+        },
+      },
+      { $sort: { name: 1 } },
+    ]).session(session),
+  ]);
+
+  const totalBilled = Number(billedData?.total || 0);
+  const totalCollected = Number(collectedData?.total || 0);
+
+  existingReport.totalBilled = totalBilled;
+  existingReport.totalCollected = totalCollected;
+  existingReport.outstanding = Math.max(totalBilled - totalCollected, 0);
+  existingReport.studentWiseSummary = studentWiseSummary;
+  existingReport.snapshot = {
+    ...(existingReport.snapshot || {}),
+    payments: {
+      ...((existingReport.snapshot || {}).payments || {}),
+      collected: totalCollected,
+    },
+    totals: {
+      ...((existingReport.snapshot || {}).totals || {}),
+      totalBilled,
+      totalCollected,
+      outstanding: Math.max(totalBilled - totalCollected, 0),
+    },
+  };
+
+  await existingReport.save({ session });
 };
 
 const withEffectiveTotals = (period) => {
@@ -230,7 +406,15 @@ const ensureReportAccess = async (id, reqUser) => {
   return report;
 };
 
-const resolveMonthlyDetails = async ({ student, fromMonth, toMonth, goiAmount = 0, session = null }) => {
+const resolveMonthlyDetails = async ({
+  student,
+  fromMonth,
+  toMonth,
+  goiAmount = 0,
+  universityClaimAmount = 0,
+  existingDetails = [],
+  session = null,
+}) => {
   const months = validateMonthRange(fromMonth, toMonth);
 
   const billQuery = MessBill.find({
@@ -245,18 +429,54 @@ const resolveMonthlyDetails = async ({ student, fromMonth, toMonth, goiAmount = 
   const bills = await billQuery;
   const billMap = new Map(bills.map((bill) => [bill.month, bill]));
   const monthlyShare = months.length ? Number(goiAmount || 0) / months.length : 0;
-
-  return months.map((month) => {
+  const existingDetailMap = new Map((existingDetails || []).map((detail) => [detail.month, detail]));
+  const baseRows = months.map((month) => {
     const bill = billMap.get(month);
     const messBillAmount = roundMoney(Number(bill?.total_amount || 0));
     const share = roundMoney(monthlyShare);
+    const differenceAmount = roundMoney(Math.max(messBillAmount - share, 0));
 
     return {
       month,
+      billId: bill?._id || null,
       messBillAmount,
       goiAmount: share,
-      differenceAmount: roundMoney(messBillAmount - share),
-      billId: bill?._id || null,
+      differenceAmount,
+    };
+  });
+  const totalDifference = roundMoney(baseRows.reduce((sum, row) => sum + Number(row.differenceAmount || 0), 0));
+  const appliedUniversityClaim = Math.min(roundMoney(Number(universityClaimAmount || 0)), totalDifference);
+  const monthlyClaims = allocateByWeights(
+    appliedUniversityClaim,
+    baseRows.map((row) => row.differenceAmount)
+  );
+
+  return baseRows.map((row, index) => {
+    const previousDetail = existingDetailMap.get(row.month);
+    const claimedAmount = roundMoney(monthlyClaims[index] || 0);
+    const studentPaidAmount = roundMoney(Number(previousDetail?.studentPaidAmount || 0));
+    const remainingBalance = roundMoney(
+      Math.max(row.differenceAmount - claimedAmount - studentPaidAmount, 0)
+    );
+    const paymentStatus =
+      remainingBalance <= 0
+        ? "paid"
+        : claimedAmount > 0
+          ? "partial_university_claim_received"
+          : row.goiAmount > 0
+            ? "partial_scholarship_received"
+            : "ebl";
+
+    return {
+      month: row.month,
+      messBillAmount: row.messBillAmount,
+      goiAmount: row.goiAmount,
+      claimedAmount,
+      differenceAmount: row.differenceAmount,
+      studentPaidAmount,
+      remainingBalance,
+      paymentStatus,
+      billId: row.billId,
     };
   });
 };
@@ -274,18 +494,46 @@ const syncCoveredBillsForPeriod = async (period, session = null) => {
 
   const coveredBills = await query;
   const normalizedPeriodUtr = String(period.periodUtr || "").trim();
-  const hasPeriodUtr = Boolean(normalizedPeriodUtr);
-  const appliedAt = new Date();
+  const affectedMonths = new Set();
+  const detailMap = new Map((period.monthlyDetails || []).map((detail) => [String(detail.billId || ""), detail]));
 
   for (const bill of coveredBills) {
-    bill.student_payment_mode = hasPeriodUtr ? "upi" : "";
-    bill.student_payment_made_date = hasPeriodUtr ? bill.student_payment_made_date || appliedAt : null;
-    bill.student_utr_number = hasPeriodUtr ? normalizedPeriodUtr : "";
+    const detail = detailMap.get(String(bill._id));
+    const claimedAmount = roundMoney(Number(detail?.claimedAmount || 0));
+    const differenceAmount = roundMoney(Number(detail?.differenceAmount || 0));
+    const studentPaidAmount = roundMoney(Number(detail?.studentPaidAmount || 0));
+    const remainingBalance = roundMoney(Math.max(Number(detail?.remainingBalance || 0), 0));
+    const goiAmount = roundMoney(Number(detail?.goiAmount || 0));
+    const paymentStatus =
+      remainingBalance <= 0
+        ? "paid"
+        : claimedAmount > 0
+          ? "partial_university_claim_received"
+          : goiAmount > 0
+            ? "partial_scholarship_received"
+            : "ebl";
+
     bill.manual_fine = 0;
     bill.fine = 0;
-    bill.amount_paid = hasPeriodUtr ? Number(bill.total_amount || 0) : 0;
-    bill.payment_status = hasPeriodUtr ? "paid" : "ebl";
+    bill.amount_paid = roundMoney(claimedAmount + studentPaidAmount);
+    bill.payment_status = paymentStatus;
+    bill.ebl_claimed_amount = claimedAmount;
+    bill.ebl_difference_amount = differenceAmount;
+    bill.ebl_student_paid_amount = studentPaidAmount;
+    bill.ebl_remaining_balance = remainingBalance;
+    if (normalizedPeriodUtr && !bill.student_utr_number) {
+      bill.student_utr_number = bill.student_utr_number || "";
+    }
     await bill.save({ session });
+    affectedMonths.add(bill.month);
+  }
+
+  for (const month of affectedMonths) {
+    await refreshMonthlyReportSnapshot({
+      month,
+      hostelId: period.hostelId?._id || period.hostelId,
+      session,
+    });
   }
 };
 
@@ -370,6 +618,7 @@ const createPeriod = async (req, res) => {
         fromMonth,
         toMonth,
         goiAmount: Number(monthlyGoiAmount || 0),
+        universityClaimAmount: 0,
         session,
       });
 
@@ -384,6 +633,7 @@ const createPeriod = async (req, res) => {
             fromMonth,
             toMonth,
             monthlyGoiAmount: Number(monthlyGoiAmount || 0),
+            universityClaimAmount: 0,
             periodUtr: String(periodUtr || "").trim(),
             scholarshipNotes: String(scholarshipNotes || "").trim(),
             monthlyDetails,
@@ -436,7 +686,7 @@ const createPeriod = async (req, res) => {
 const updatePeriod = async (req, res) => {
   try {
     const { id } = req.params;
-    const { monthlyGoiAmount, periodUtr, scholarshipNotes } = req.body;
+    const { monthlyGoiAmount, universityClaimAmount, periodUtr, scholarshipNotes } = req.body;
 
     const updated = await runInTransaction(async (session) => {
       const period = await EblPeriod.findById(id).populate(POPULATE_EBL_PERIOD).session(session);
@@ -446,18 +696,42 @@ const updatePeriod = async (req, res) => {
         throw error;
       }
 
-      if (String(period.hostelId._id || period.hostelId) !== String(req.user.hostelId)) {
-        const error = new Error("You can only update EBL periods for your hostel.");
-        error.status = 403;
-        throw error;
+      if (req.user.role === "caretaker") {
+        if (String(period.hostelId._id || period.hostelId) !== String(req.user.hostelId)) {
+          const error = new Error("You can only update EBL periods for your hostel.");
+          error.status = 403;
+          throw error;
+        }
+      } else if (req.user.role === "student") {
+        const periodStudentUserId = String(period.userId?._id || period.userId);
+        if (periodStudentUserId !== String(req.user._id)) {
+          const error = new Error("You can only update your own EBL periods.");
+          error.status = 403;
+          throw error;
+        }
+        if (period.status !== "draft") {
+          const error = new Error("This EBL claim has already been accepted by the caretaker and can no longer be edited.");
+          error.status = 400;
+          throw error;
+        }
       }
 
       const student = await ensureStudentAccess(period.studentId._id || period.studentId, req.user, session);
       const nextGoiAmount =
         monthlyGoiAmount !== undefined ? Number(monthlyGoiAmount || 0) : Number(period.monthlyGoiAmount || 0);
+      const nextUniversityClaimAmount =
+        universityClaimAmount !== undefined
+          ? Number(universityClaimAmount || 0)
+          : Number(period.universityClaimAmount || 0);
 
       if (nextGoiAmount < 0) {
         const error = new Error("GOI sanctioned amount cannot be negative.");
+        error.status = 400;
+        throw error;
+      }
+
+      if (nextUniversityClaimAmount < 0) {
+        const error = new Error("Amount claimed from university cannot be negative.");
         error.status = 400;
         throw error;
       }
@@ -467,10 +741,13 @@ const updatePeriod = async (req, res) => {
         fromMonth: period.fromMonth,
         toMonth: period.toMonth,
         goiAmount: nextGoiAmount,
+        universityClaimAmount: nextUniversityClaimAmount,
+        existingDetails: period.monthlyDetails || [],
         session,
       });
 
       period.monthlyGoiAmount = nextGoiAmount;
+      period.universityClaimAmount = nextUniversityClaimAmount;
       if (periodUtr !== undefined) {
         period.periodUtr = String(periodUtr || "").trim();
       }
@@ -492,6 +769,7 @@ const updatePeriod = async (req, res) => {
         entityType: "EblPeriod",
         metadata: {
           goiAmount: period.monthlyGoiAmount,
+          universityClaimAmount: period.universityClaimAmount,
           periodUtr: period.periodUtr,
         },
         session,
@@ -507,6 +785,65 @@ const updatePeriod = async (req, res) => {
     });
   } catch (error) {
     logger.error("Update EBL period error", { error: error.message, stack: error.stack });
+    return res.status(error.status || 500).json({ success: false, message: error.message || "Server error." });
+  }
+};
+
+const verifyPeriod = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const verifiedPeriod = await runInTransaction(async (session) => {
+      const period = await EblPeriod.findById(id).populate(POPULATE_EBL_PERIOD).session(session);
+      if (!period) {
+        const error = new Error("EBL period not found.");
+        error.status = 404;
+        throw error;
+      }
+
+      if (String(period.hostelId?._id || period.hostelId) !== String(req.user.hostelId)) {
+        const error = new Error("You can only verify EBL periods for your hostel.");
+        error.status = 403;
+        throw error;
+      }
+
+      if (period.status !== "draft") {
+        const error = new Error("Only submitted draft EBL claims can be accepted.");
+        error.status = 400;
+        throw error;
+      }
+
+      period.status = "verified";
+      period.verifiedBy = req.user._id;
+      period.verifiedAt = new Date();
+      period.updatedBy = req.user._id;
+      await period.save({ session });
+
+      await createAuditLog({
+        action: "EBL_PERIOD_VERIFIED",
+        performedBy: req.user._id,
+        role: req.user.role,
+        entityId: period._id,
+        entityType: "EblPeriod",
+        metadata: {
+          studentId: period.studentId?._id || period.studentId,
+          hostelId: period.hostelId?._id || period.hostelId,
+          fromMonth: period.fromMonth,
+          toMonth: period.toMonth,
+        },
+        session,
+      });
+
+      return EblPeriod.findById(period._id).populate(POPULATE_EBL_PERIOD).session(session);
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "EBL claim accepted successfully.",
+      data: withEffectiveTotals(verifiedPeriod),
+    });
+  } catch (error) {
+    logger.error("Verify EBL period error", { error: error.message, stack: error.stack });
     return res.status(error.status || 500).json({ success: false, message: error.message || "Server error." });
   }
 };
@@ -659,6 +996,12 @@ const buildReportTotals = (entries = []) =>
       acc.totalDifference = roundMoney(
         acc.totalDifference + Number(period.totals?.totalDifference || 0)
       );
+      acc.totalUniversityClaim = roundMoney(
+        acc.totalUniversityClaim + Number(period.totals?.totalClaimedAmount || 0)
+      );
+      acc.totalRemainingBalance = roundMoney(
+        acc.totalRemainingBalance + Number(period.totals?.totalRemainingBalance || 0)
+      );
       return acc;
     },
     {
@@ -666,6 +1009,8 @@ const buildReportTotals = (entries = []) =>
       totalMessBill: 0,
       totalScholarship: 0,
       totalDifference: 0,
+      totalUniversityClaim: 0,
+      totalRemainingBalance: 0,
     }
   );
 
@@ -673,8 +1018,8 @@ const generateReport = async (req, res) => {
   try {
     await EblReport.ensureIndexesReady();
     const { reportType, fromMonth, toMonth } = req.body;
-    if (!["pre_receipt", "month_wise"].includes(reportType)) {
-      return res.status(400).json({ success: false, message: "reportType must be pre_receipt or month_wise." });
+    if (!["pre_receipt", "month_wise", "university_claim", "university_claim_month_wise"].includes(reportType)) {
+      return res.status(400).json({ success: false, message: "reportType must be pre_receipt, month_wise, university_claim, or university_claim_month_wise." });
     }
 
     validateMonthRange(fromMonth, toMonth);
@@ -707,6 +1052,8 @@ const generateReport = async (req, res) => {
           totalMessBill: roundMoney(totals.totalMessBill),
           totalScholarship: roundMoney(totals.totalScholarship),
           totalDifference: roundMoney(totals.totalDifference),
+          totalUniversityClaim: roundMoney(totals.totalUniversityClaim),
+          totalRemainingBalance: roundMoney(totals.totalRemainingBalance),
           status: "draft",
           generatedBy: req.user._id,
           submittedBy: null,
@@ -917,7 +1264,7 @@ const renderMonthWisePdf = ({ res, report, entries, contacts }) => {
   entries.forEach((entry, index) => {
     drawSectionHeading(
       doc,
-      `${entry.studentId?.studentId || "-"} ${entry.userId?.name || "Student"}${entry.studentId?.studentClass ? ` ${entry.studentId.studentClass}` : ""}`,
+        `${entry.studentId?.studentId || "-"} ${entry.userId?.name || "Student"}`,
     );
 
     const monthlyRows = entry.monthlyDetails?.length
@@ -972,6 +1319,164 @@ const renderMonthWisePdf = ({ res, report, entries, contacts }) => {
   doc.end();
 };
 
+const renderUniversityClaimPdf = ({ res, report, entries, contacts }) => {
+  const periodLabel = `${report.fromMonth} to ${report.toMonth}`;
+  const doc = createPdfDocument(res, `ebl-university-claim-${report.fromMonth}-to-${report.toMonth}.pdf`, {
+    size: "A4",
+    layout: "landscape",
+    margin: 28,
+  });
+
+  const renderHeader = () =>
+    drawUniversityHeader(doc, {
+      reportTitle: "University Claim Statement",
+      hostelName: report.hostelId?.name || "Hostel",
+      month: periodLabel,
+      generatedBy: report.generatedBy?.name || "Caretaker",
+      generatedAt: report.updatedAt || report.createdAt,
+      officeLabel: "EBL University Claim Reconciliation",
+    });
+
+  renderHeader();
+  drawContactDetailsBlock(doc, contacts);
+
+  drawTable(doc, {
+    columns: [
+      { label: "Sl. No.", width: 34, key: "serial", align: "center" },
+      { label: "Student Name", width: 124, key: "name" },
+      { label: "ID No.", width: 78, key: "studentId" },
+      { label: "Period", width: 96, key: "period" },
+      { label: "Bill Amount", width: 74, key: "messBill", align: "right" },
+      { label: "GOI Amount", width: 72, key: "goi", align: "right" },
+      { label: "Difference", width: 76, key: "difference", align: "right" },
+      { label: "University Claim", width: 84, key: "claim", align: "right", headerFontSize: 8.4 },
+      { label: "Balance Amount", width: 88, key: "remaining", align: "right" },
+    ],
+    rows: [
+      ...entries.map((entry, index) => ({
+        serial: String(index + 1),
+        name: entry.userId?.name || "Student",
+        studentId: entry.studentId?.studentId || "-",
+        period: entry.periodLabel,
+        messBill: formatCurrency(entry.totals?.totalMessBill || 0),
+        goi: formatCurrency(entry.totals?.totalScholarship || 0),
+        difference: formatCurrency(entry.totals?.totalDifference || 0),
+        claim: formatCurrency(entry.totals?.totalClaimedAmount || 0),
+        remaining: formatCurrency(entry.totals?.totalRemainingBalance || 0),
+      })),
+      {
+        serial: "",
+        name: "Grand Total",
+        studentId: "",
+        period: periodLabel,
+        messBill: formatCurrency(report.totalMessBill || 0),
+        goi: formatCurrency(report.totalScholarship || 0),
+        difference: formatCurrency(report.totalDifference || 0),
+        claim: formatCurrency(report.totalUniversityClaim || 0),
+        remaining: formatCurrency(report.totalRemainingBalance || 0),
+      },
+    ],
+    fontSize: 8.2,
+    rowPadding: 5,
+  });
+
+  drawSignatureBlock(doc, {
+    signatures: [
+      { label: "Caretaker" },
+      { label: "Warden" },
+      { label: "Dean and Chairman, Hostel Supervisory Committee" },
+    ],
+    footerDate: report.updatedAt || report.createdAt,
+  });
+
+  doc.end();
+};
+
+const renderUniversityClaimMonthWisePdf = ({ res, report, entries, contacts }) => {
+  const periodLabel = `${report.fromMonth} to ${report.toMonth}`;
+  const doc = createPdfDocument(res, `ebl-university-claim-month-wise-${report.fromMonth}-to-${report.toMonth}.pdf`, {
+    size: "A4",
+    layout: "portrait",
+    margin: 28,
+  });
+
+  const renderHeader = () =>
+    drawUniversityHeader(doc, {
+      reportTitle: "University Claim Month-wise Statement",
+      hostelName: report.hostelId?.name || "Hostel",
+      month: periodLabel,
+      generatedBy: report.generatedBy?.name || "Caretaker",
+      generatedAt: report.updatedAt || report.createdAt,
+      officeLabel: "EBL University Claim Reconciliation Register",
+    });
+
+  renderHeader();
+  drawContactDetailsBlock(doc, contacts);
+
+  entries.forEach((entry, index) => {
+    drawSectionHeading(doc, `${entry.studentId?.studentId || "-"} ${entry.userId?.name || "Student"}`);
+
+    const monthlyRows = entry.monthlyDetails?.length
+      ? entry.monthlyDetails.map((detail) => ({
+          month: detail.month.replace("-", " "),
+          messBill: formatCurrency(detail.messBillAmount),
+          goi: formatCurrency(detail.goiAmount),
+          difference: formatCurrency(detail.differenceAmount),
+          claim: formatCurrency(detail.claimedAmount),
+          remaining: formatCurrency(detail.remainingBalance),
+        }))
+      : [
+          {
+            month: periodLabel,
+            messBill: formatCurrency(0),
+            goi: formatCurrency(0),
+            difference: formatCurrency(0),
+            claim: formatCurrency(0),
+            remaining: formatCurrency(0),
+          },
+        ];
+
+    drawTable(doc, {
+      columns: [
+        { label: "Month", width: 78, key: "month" },
+        { label: "Mess Bill", width: 82, key: "messBill", align: "right" },
+        { label: "GOI Amount", width: 78, key: "goi", align: "right" },
+        { label: "Difference", width: 78, key: "difference", align: "right" },
+        { label: "University Claim", width: 92, key: "claim", align: "right", headerFontSize: 8.6 },
+        { label: "Balance Amount", width: 88, key: "remaining", align: "right" },
+      ],
+      rows: [
+        ...monthlyRows,
+        {
+          month: "Total",
+          messBill: formatCurrency(entry.totals?.totalMessBill || 0),
+          goi: formatCurrency(entry.totals?.totalScholarship || 0),
+          difference: formatCurrency(entry.totals?.totalDifference || 0),
+          claim: formatCurrency(entry.totals?.totalClaimedAmount || 0),
+          remaining: formatCurrency(entry.totals?.totalRemainingBalance || 0),
+        },
+      ],
+      fontSize: 8.8,
+      rowPadding: 5,
+    });
+
+    if (index !== entries.length - 1) {
+      doc.moveDown(0.8);
+    }
+  });
+
+  drawSignatureBlock(doc, {
+    signatures: [
+      { label: "Caretaker" },
+      { label: "Warden" },
+      { label: "Dean and Chairman, Hostel Supervisory Committee" },
+    ],
+    footerDate: report.updatedAt || report.createdAt,
+  });
+
+  doc.end();
+};
+
 const downloadReportPdf = async (req, res) => {
   try {
     await EblReport.ensureIndexesReady();
@@ -996,6 +1501,14 @@ const downloadReportPdf = async (req, res) => {
       return renderPreReceiptPdf({ res, report, entries, contacts });
     }
 
+    if (report.reportType === "university_claim") {
+      return renderUniversityClaimPdf({ res, report, entries, contacts });
+    }
+
+    if (report.reportType === "university_claim_month_wise") {
+      return renderUniversityClaimMonthWisePdf({ res, report, entries, contacts });
+    }
+
     return renderMonthWisePdf({ res, report, entries, contacts });
   } catch (error) {
     logger.error("Download EBL report PDF error", { error: error.message, stack: error.stack });
@@ -1008,6 +1521,7 @@ module.exports = {
   listReports,
   createPeriod,
   updatePeriod,
+  verifyPeriod,
   getStudentEblStatus,
   generateReport,
   submitReport,

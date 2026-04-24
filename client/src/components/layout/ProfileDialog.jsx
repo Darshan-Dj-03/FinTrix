@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { X } from "lucide-react";
+import { Eye, EyeOff, Mail, X } from "lucide-react";
 
 import { authApi } from "../../api/authApi";
 import { useAuthStore } from "../../store/authStore";
@@ -13,6 +13,9 @@ import { ROLE_LABELS } from "../../utils/constants";
 export function ProfileDialog({ open, onClose, user, studentProfile }) {
   const updateStoredProfile = useAuthStore((state) => state.updateProfile);
   const canEditPhoneNumber = ["warden", "caretaker"].includes(user?.role);
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const {
     register,
     handleSubmit,
@@ -21,7 +24,7 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      currentPassword: "",
+      otp: "",
       newPassword: "",
       confirmPassword: "",
     },
@@ -39,6 +42,9 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
 
   useEffect(() => {
     if (!open) {
+      setOtpRequested(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
       reset();
       resetContact({ phoneNumber: user?.phoneNumber || "" });
     }
@@ -48,10 +54,21 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
     resetContact({ phoneNumber: user?.phoneNumber || "" });
   }, [resetContact, user?.phoneNumber]);
 
+  const requestPasswordOtpMutation = useMutation({
+    mutationFn: authApi.requestProfilePasswordOtp,
+    onSuccess: () => {
+      setOtpRequested(true);
+      toast.success("OTP sent to your registered email.");
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Unable to send OTP.");
+    },
+  });
   const changePasswordMutation = useMutation({
-    mutationFn: authApi.changePassword,
+    mutationFn: authApi.changePasswordWithOtp,
     onSuccess: () => {
       toast.success("Password changed successfully.");
+      setOtpRequested(false);
       reset();
       onClose();
     },
@@ -86,8 +103,21 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
         ? "Assigned"
         : "Not assigned";
 
-  const onSubmit = handleSubmit(({ currentPassword, newPassword }) => {
-    changePasswordMutation.mutate({ currentPassword, newPassword });
+  const newPasswordValue = watch("newPassword");
+  const confirmPasswordValue = watch("confirmPassword");
+  const passwordsMatch = Boolean(
+    newPasswordValue &&
+      confirmPasswordValue &&
+      newPasswordValue === confirmPasswordValue
+  );
+  const passwordsMismatch = Boolean(
+    newPasswordValue &&
+      confirmPasswordValue &&
+      newPasswordValue !== confirmPasswordValue
+  );
+
+  const onSubmit = handleSubmit(({ otp, newPassword }) => {
+    changePasswordMutation.mutate({ otp, newPassword });
   });
   const onContactSubmit = handleContactSubmit(({ phoneNumber }) => {
     updateProfileMutation.mutate({ phoneNumber });
@@ -178,34 +208,70 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
 
           <form onSubmit={onSubmit} className="rounded-3xl border border-slate-200 p-5">
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Change password</h3>
+            <p className="mt-3 text-sm text-slate-500">
+              Request an email OTP to your registered account email, then confirm your new password here.
+            </p>
             <div className="mt-4 space-y-4">
               <div>
-                <label className="text-sm font-medium text-slate-700">Current password</label>
+                <label className="text-sm font-medium text-slate-700">Registered email</label>
+                <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <Mail size={16} className="text-slate-400" />
+                  <span>{user?.email || "-"}</span>
+                </div>
+              </div>
+
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => requestPasswordOtpMutation.mutate()}
+                  loading={requestPasswordOtpMutation.isPending}
+                >
+                  {otpRequested ? "Resend OTP" : "Send OTP"}
+                </Button>
+                <p className="mt-2 text-xs text-slate-500">
+                  The OTP stays valid for 10 minutes.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700">Email OTP</label>
                 <Input
-                  type="password"
+                  type="text"
                   className="mt-2"
-                  placeholder="Enter current password"
-                  {...register("currentPassword", { required: "Current password is required" })}
+                  placeholder="Enter the 6-digit OTP"
+                  maxLength={6}
+                  {...register("otp", {
+                    required: "OTP is required",
+                  })}
                 />
-                {errors.currentPassword ? (
-                  <p className="mt-2 text-xs font-medium text-rose-500">{errors.currentPassword.message}</p>
-                ) : null}
+                {errors.otp ? <p className="mt-2 text-xs font-medium text-rose-500">{errors.otp.message}</p> : null}
               </div>
 
               <div>
                 <label className="text-sm font-medium text-slate-700">New password</label>
-                <Input
-                  type="password"
-                  className="mt-2"
-                  placeholder="Enter new password"
-                  {...register("newPassword", {
-                    required: "New password is required",
-                    minLength: {
-                      value: 8,
-                      message: "New password must be at least 8 characters",
-                    },
-                  })}
-                />
+                <div className="relative mt-2">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    className="pr-12"
+                    placeholder="Enter new password"
+                    {...register("newPassword", {
+                      required: "New password is required",
+                      minLength: {
+                        value: 8,
+                        message: "New password must be at least 8 characters",
+                      },
+                    })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((current) => !current)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                    aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {errors.newPassword ? (
                   <p className="mt-2 text-xs font-medium text-rose-500">{errors.newPassword.message}</p>
                 ) : null}
@@ -213,24 +279,44 @@ export function ProfileDialog({ open, onClose, user, studentProfile }) {
 
               <div>
                 <label className="text-sm font-medium text-slate-700">Confirm new password</label>
-                <Input
-                  type="password"
-                  className="mt-2"
-                  placeholder="Re-enter new password"
-                  {...register("confirmPassword", {
-                    required: "Please confirm the new password",
-                    validate: (value) =>
-                      value === watch("newPassword") || "New password and confirmation must match",
-                  })}
-                />
+                <div className="relative mt-2">
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    className="pr-12"
+                    placeholder="Re-enter new password"
+                    {...register("confirmPassword", {
+                      required: "Please confirm the new password",
+                      validate: (value) =>
+                        value === watch("newPassword") || "New password and confirmation must match",
+                    })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((current) => !current)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {errors.confirmPassword ? (
                   <p className="mt-2 text-xs font-medium text-rose-500">{errors.confirmPassword.message}</p>
+                ) : null}
+                {passwordsMatch ? (
+                  <p className="mt-2 text-xs font-medium text-emerald-600">Passwords match.</p>
+                ) : null}
+                {passwordsMismatch ? (
+                  <p className="mt-2 text-xs font-medium text-rose-500">Passwords do not match.</p>
                 ) : null}
               </div>
             </div>
 
             <div className="mt-6 flex justify-end">
-              <Button type="submit" loading={changePasswordMutation.isPending}>
+              <Button
+                type="submit"
+                loading={changePasswordMutation.isPending}
+                disabled={!otpRequested || requestPasswordOtpMutation.isPending}
+              >
                 Update password
               </Button>
             </div>

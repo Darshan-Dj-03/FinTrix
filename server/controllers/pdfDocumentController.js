@@ -105,8 +105,18 @@ const getBillBreakdownValues = (bill) => {
     dynamic,
     foodTotal,
     establishmentTotal,
-    totalPayable: toCurrency(bill.total_amount) + toCurrency(bill.fine),
+    totalPayable: toCurrency(bill.total_payable !== undefined ? bill.total_payable : bill.total_amount) + toCurrency(bill.fine || 0),
   };
+};
+
+const formatPaymentStatusLabel = (value) => {
+  if (value === "partial_scholarship_received") {
+    return "PARTIALLY PAID - SCHOLARSHIP RECEIVED";
+  }
+  if (value === "partial_university_claim_received") {
+    return "PARTIALLY PAID - UNIVERSITY CLAIM RECEIVED";
+  }
+  return String(value || "pending").replaceAll("_", " ").toUpperCase();
 };
 
 const drawApprovalFooter = (doc, redrawHeader, note) => {
@@ -180,6 +190,15 @@ const generateBillPDF = async (req, res) => {
         { label: "Amount", width: 120, key: "amount", align: "right" },
       ],
       rows: [
+        ...(Number(liveBill.absence_deduction || 0) > 0
+          ? [
+              { particular: "Base Mess Before Absence", amount: formatCurrency(liveBill.base_mess_before_absence || 0) },
+              {
+                particular: `Absence Deduction (${Number(liveBill.absent_days || 0)} days)`,
+                amount: formatCurrency(liveBill.absence_deduction || 0),
+              },
+            ]
+          : []),
         { particular: "Monthly Mess Bill", amount: formatCurrency(liveBill.base_mess) },
         { particular: "Egg", amount: formatCurrency(liveBill.egg_total) },
         { particular: "Bakery / Banana", amount: formatCurrency(liveBill.bakery_charge) },
@@ -200,14 +219,42 @@ const generateBillPDF = async (req, res) => {
       ],
     });
 
+    const billSummaryItems = [
+      { label: "Bill Amount", value: formatCurrency(liveBill.total_amount) },
+      { label: "Fine", value: formatCurrency(liveBill.fine) },
+      { label: "Absent Days", value: String(Number(liveBill.absent_days || 0)) },
+      { label: "Absence Deduction", value: formatCurrency(liveBill.absence_deduction || 0) },
+    ];
+
+    if (liveBill.is_ebl_student) {
+      billSummaryItems.push({
+        label: "GOI Amount",
+        value: formatCurrency(Math.max(Number(liveBill.total_amount || 0) - Number(liveBill.ebl_difference_amount || 0), 0)),
+      });
+
+      if (Number(liveBill.ebl_claimed_amount || 0) > 0) {
+        billSummaryItems.push({
+          label: "University Claim",
+          value: formatCurrency(liveBill.ebl_claimed_amount || 0),
+        });
+      }
+
+      billSummaryItems.push({
+        label: "Balance Amount",
+        value: formatCurrency(liveBill.ebl_remaining_balance || 0),
+      });
+    } else {
+      billSummaryItems.push({ label: "Total Payable", value: formatCurrency(breakdown.totalPayable) });
+    }
+
+    billSummaryItems.push({
+      label: "Payment Status",
+      value: formatPaymentStatusLabel(liveBill.payment_status),
+    });
+
     drawSummaryPanel(doc, {
       title: "Bill Summary",
-      items: [
-        { label: "Bill Amount", value: formatCurrency(liveBill.total_amount) },
-        { label: "Fine", value: formatCurrency(liveBill.fine) },
-        { label: "Total Payable", value: formatCurrency(breakdown.totalPayable) },
-        { label: "Payment Status", value: String(liveBill.payment_status || "pending").toUpperCase() },
-      ],
+      items: billSummaryItems,
     });
 
     drawApprovalFooter(
@@ -243,8 +290,12 @@ const generatePaymentSlipPDF = async (req, res) => {
     const liveBill = applyLiveBillState(bill);
     const payments = await Payment.find({ billId: bill._id }).sort({ verifiedAt: 1 });
     const paidSoFar = payments.reduce((sum, payment) => sum + toCurrency(payment.amount), 0);
-    const totalPayable = toCurrency(liveBill.total_amount) + toCurrency(liveBill.fine);
-    const balanceDue = Math.max(0, totalPayable - paidSoFar);
+    const totalPayable = toCurrency(
+      liveBill.total_payable !== undefined ? liveBill.total_payable : liveBill.total_amount
+    ) + toCurrency(liveBill.fine || 0);
+    const balanceDue = liveBill.is_ebl_student
+      ? Math.max(0, toCurrency(liveBill.ebl_remaining_balance))
+      : Math.max(0, totalPayable - paidSoFar);
     const doc = createPdfDocument(
       res,
       `payment-slip-${liveBill.studentId?.studentId || studentId}-${month}.pdf`
@@ -281,9 +332,27 @@ const generatePaymentSlipPDF = async (req, res) => {
       rows: [
         { particulars: "Bill Amount", amount: formatCurrency(liveBill.total_amount), remarks: "Monthly hostel bill" },
         { particulars: "Fine", amount: formatCurrency(liveBill.fine), remarks: liveBill.fine > 0 ? "Applied on current bill" : "Nil" },
-        { particulars: "Total Payable", amount: formatCurrency(totalPayable), remarks: "Before any payments" },
+        ...(liveBill.is_ebl_student
+          ? [
+              {
+                particulars: "GOI Amount",
+                amount: formatCurrency(Math.max(Number(liveBill.total_amount || 0) - Number(liveBill.ebl_difference_amount || 0), 0)),
+                remarks: "Scholarship sanctioned amount",
+              },
+              ...(Number(liveBill.ebl_claimed_amount || 0) > 0
+                ? [
+                    {
+                      particulars: "University Claim",
+                      amount: formatCurrency(liveBill.ebl_claimed_amount || 0),
+                      remarks: "University claim received",
+                    },
+                  ]
+                : []),
+              { particulars: "Total Payable", amount: formatCurrency(totalPayable), remarks: "Student balance payable" },
+            ]
+          : [{ particulars: "Total Payable", amount: formatCurrency(totalPayable), remarks: "Before any payments" }]),
         { particulars: "Paid So Far", amount: formatCurrency(paidSoFar), remarks: `${payments.length} recorded payment(s)` },
-        { particulars: "Balance Due", amount: formatCurrency(balanceDue), remarks: String(liveBill.payment_status || "pending").toUpperCase() },
+        { particulars: "Balance Due", amount: formatCurrency(balanceDue), remarks: formatPaymentStatusLabel(liveBill.payment_status) },
       ],
     });
 

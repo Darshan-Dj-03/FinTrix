@@ -63,6 +63,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    approvalStatus: {
+      type: String,
+      enum: ["approved", "pending_caretaker", "pending_admin", "rejected"],
+      default: "approved",
+    },
 
     isEBL: {
       type: Boolean,

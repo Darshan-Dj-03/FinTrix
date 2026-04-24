@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 const Report = require("../models/Report");
 const Expense = require("../models/Expense");
 const MessBill = require("../models/MessBill");
-const Payment = require("../models/Payment");
 const Charge = require("../models/Charge");
 const Hostel = require("../models/Hostel");
 const {
@@ -69,16 +68,10 @@ const buildMonthlySnapshot = async (month, hostelFilter = null, session = null) 
     { $group: { _id: null, total: { $sum: "$total_amount" } } },
   ]).session(session);
 
-  const paymentPipeline = [
-    { $match: { month, status: "paid" } },
-  ];
-
-  if (hostelFilter) {
-    paymentPipeline.push({ $match: { hostelId: new mongoose.Types.ObjectId(hostelFilter) } });
-  }
-
-  paymentPipeline.push({ $group: { _id: null, total: { $sum: "$amount" } } });
-  const paymentData = await Payment.aggregate(paymentPipeline).session(session);
+  const [collectedData] = await MessBill.aggregate([
+    { $match: billMatch },
+    { $group: { _id: null, total: { $sum: "$amount_paid" } } },
+  ]).session(session);
 
   const hostelWiseBreakdown = await MessBill.aggregate([
     { $match: billMatch },
@@ -144,7 +137,7 @@ const buildMonthlySnapshot = async (month, hostelFilter = null, session = null) 
 
   const totalExpenses = Number(expenseData?.total || 0) + Number(chargeData?.total || 0);
   const totalBilled = Number(billedData?.total || 0);
-  const totalCollected = Number(paymentData[0]?.total || 0);
+  const totalCollected = Number(collectedData?.total || 0);
   const outstanding = totalBilled - totalCollected;
 
   return {

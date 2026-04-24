@@ -132,8 +132,6 @@ const specification = swaggerJsdoc({
       },
       "/charges/add": { post: { summary: "Create charge", responses: { 201: { description: "Charge created" } } } },
       "/charges/{month}": { get: { summary: "List charges", responses: { 200: { description: "Charges fetched" } } } },
-      "/ledger/create/{month}": { post: { summary: "Create ledger", responses: { 201: { description: "Ledger created" } } } },
-      "/ledger/{month}": { get: { summary: "List ledgers", responses: { 200: { description: "Ledgers fetched" } } } },
     },
   },
   apis: [],

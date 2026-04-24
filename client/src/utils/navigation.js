@@ -4,7 +4,6 @@ import {
   Calculator,
   CreditCard,
   IndianRupee,
-  FileBarChart2,
   LayoutDashboard,
   ListOrdered,
   Receipt,
@@ -26,6 +25,7 @@ export const navigationByRole = {
   caretaker: [
     { label: "Overview", to: "/caretaker", icon: LayoutDashboard },
     { label: "Consumption", to: "/caretaker/consumption", icon: ListOrdered },
+    { label: "Student Signups", to: "/caretaker/student-signups", icon: Users },
     { label: "Guest Charge", to: "/caretaker/guest-charge", icon: Users },
     { label: "Static Charges", to: "/caretaker/charges", icon: Sparkles },
     { label: "Hostel Expense", to: "/caretaker/hostel-expense", icon: Calculator },
@@ -42,16 +42,15 @@ export const navigationByRole = {
     { label: "Hostels", to: "/admin/hostels", icon: Building2 },
     { label: "Expenses", to: "/admin/expenses", icon: IndianRupee },
     { label: "Consumption", to: "/admin/consumption", icon: ListOrdered },
+    { label: "Student Signups", to: "/admin/student-signups", icon: Users },
     { label: "Approvals", to: "/admin/approvals", icon: ShieldCheck },
     { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
-    { label: "Ledger", to: "/admin/ledger", icon: FileBarChart2 },
     { label: "Users", to: "/admin/users", icon: Users },
   ],
   dean: [
     { label: "Overview", to: "/admin", icon: LayoutDashboard },
     { label: "Approvals", to: "/admin/approvals", icon: ShieldCheck },
     { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
-    { label: "Ledger", to: "/admin/ledger", icon: FileBarChart2 },
   ],
   warden: [
     { label: "Overview", to: "/admin", icon: LayoutDashboard },

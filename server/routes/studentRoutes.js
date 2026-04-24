@@ -6,6 +6,13 @@ const {
   getAllStudents,
   updateStudent,
 } = require("../controllers/studentController");
+const {
+  listSignupRequests,
+  caretakerForwardSignup,
+  caretakerRejectSignup,
+  adminApproveSignup,
+  adminRejectSignup,
+} = require("../controllers/studentSignupController");
 const { protect } = require("../middleware/authMiddleware");
 const { checkRole } = require("../middleware/roleMiddleware");
 
@@ -34,6 +41,37 @@ router.patch(
   protect,
   checkRole("admin", "caretaker"),
   updateStudent
+);
+
+router.get(
+  "/signup-requests",
+  protect,
+  checkRole("admin", "caretaker"),
+  listSignupRequests
+);
+router.patch(
+  "/signup-requests/:id/caretaker-forward",
+  protect,
+  checkRole("caretaker"),
+  caretakerForwardSignup
+);
+router.patch(
+  "/signup-requests/:id/caretaker-reject",
+  protect,
+  checkRole("caretaker"),
+  caretakerRejectSignup
+);
+router.patch(
+  "/signup-requests/:id/admin-approve",
+  protect,
+  checkRole("admin"),
+  adminApproveSignup
+);
+router.patch(
+  "/signup-requests/:id/admin-reject",
+  protect,
+  checkRole("admin"),
+  adminRejectSignup
 );
 
 module.exports = router;

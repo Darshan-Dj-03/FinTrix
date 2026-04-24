@@ -8,6 +8,7 @@ import { LoadingState } from "../../components/common/LoadingState";
 import { MonthPicker } from "../../components/common/MonthPicker";
 import { PageHeader } from "../../components/common/PageHeader";
 import { Pagination } from "../../components/common/Pagination";
+import { StatusBadge } from "../../components/common/StatusBadge";
 import { BillCard } from "../../features/student/BillCard";
 import { useBillDownload } from "../../hooks/useBillDownload";
 import { useAuthStore } from "../../store/authStore";
@@ -71,9 +72,11 @@ export function StudentBillsPage() {
         columns={[
           { key: "month", label: "Month" },
           { key: "total_amount", label: "Bill", render: (row) => formatCurrency(row.total_amount) },
+          { key: "absent_days", label: "Absent Days", render: (row) => Number(row.absent_days || 0) },
+          { key: "absence_deduction", label: "Absence Deduction", render: (row) => formatCurrency(row.absence_deduction || 0) },
           { key: "fine", label: "Fine", render: (row) => formatCurrency(row.fine || 0) },
           { key: "amount_paid", label: "Paid", render: (row) => formatCurrency(row.amount_paid || 0) },
-          { key: "payment_status", label: "Status" },
+          { key: "payment_status", label: "Status", render: (row) => <StatusBadge value={row.payment_status} /> },
         ]}
         emptyMessage="No historical bills available yet."
       />

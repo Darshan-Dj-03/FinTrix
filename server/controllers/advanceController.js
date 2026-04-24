@@ -15,6 +15,7 @@ const POPULATE_CONFIG = [
     populate: { path: "userId", select: "name email hostelId isActive" },
   },
   { path: "createdBy", select: "name email role" },
+  { path: "settlements.recordedBy", select: "name email role" },
 ];
 
 const isOperationalStudent = (student) =>
@@ -65,6 +66,44 @@ const normalizeBillDates = (billDates = []) => {
   return { billDates: normalized };
 };
 
+const normalizeSettlements = (settlements = [], recordedBy = null) => {
+  if (!Array.isArray(settlements)) {
+    return { error: "settlements must be an array." };
+  }
+
+  const normalized = [];
+  for (const row of settlements) {
+    const numericAmount = Number(row?.amount);
+    if (Number.isNaN(numericAmount) || numericAmount < 0) {
+      return { error: "Each settlement amount must be a non-negative number." };
+    }
+
+    const parsedDate = new Date(row?.settlementDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return { error: "Each settlement date must be a valid date." };
+    }
+
+    normalized.push({
+      settlementDate: parsedDate,
+      amount: numericAmount,
+      notes: String(row?.notes || "").trim(),
+      recordedBy: row?.recordedBy || recordedBy || null,
+      isLegacyImported: Boolean(row?.isLegacyImported),
+    });
+  }
+
+  return { settlements: normalized };
+};
+
+const sumSettlements = (settlements = []) =>
+  settlements.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+const getLegacyClosedAmount = (advance) => {
+  const currentClosedAmount = Number(advance?.closedAmount || 0);
+  const currentSettlementTotal = sumSettlements(advance?.settlements || []);
+  return Math.max(currentClosedAmount - currentSettlementTotal, 0);
+};
+
 const ensurePrefectStudent = async (prefectStudentId, hostelId) => {
   if (!prefectStudentId || !mongoose.Types.ObjectId.isValid(prefectStudentId)) {
     return { error: "Valid prefectStudentId is required.", status: 400 };
@@ -93,7 +132,16 @@ const ensurePrefectStudent = async (prefectStudentId, hostelId) => {
 
 const addAdvance = async (req, res) => {
   try {
-    const { month, prefectStudentId, takenAmount, closedAmount = 0, billDates = [], chequeDetails = "", hostelId: providedHostelId } = req.body;
+    const {
+      month,
+      prefectStudentId,
+      takenAmount,
+      closedAmount = 0,
+      settlements = [],
+      billDates = [],
+      chequeDetails = "",
+      hostelId: providedHostelId,
+    } = req.body;
 
     if (!month || !prefectStudentId || takenAmount === undefined) {
       return res.status(400).json({
@@ -133,6 +181,7 @@ const addAdvance = async (req, res) => {
       ensurePrefectStudent(prefectStudentId, resolved.hostelId),
       Promise.resolve(normalizeBillDates(billDates)),
     ]);
+    const settlementValidation = normalizeSettlements(settlements, req.user._id);
 
     if (!hostel) {
       return res.status(404).json({ success: false, message: "Hostel not found." });
@@ -146,12 +195,28 @@ const addAdvance = async (req, res) => {
       return res.status(400).json({ success: false, message: billDateValidation.error });
     }
 
+    if (settlementValidation.error) {
+      return res.status(400).json({ success: false, message: settlementValidation.error });
+    }
+
+    const resolvedClosedAmount = settlementValidation.settlements.length
+      ? sumSettlements(settlementValidation.settlements)
+      : numericClosedAmount;
+
+    if (resolvedClosedAmount > numericTakenAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "Settled amount cannot exceed the taken amount.",
+      });
+    }
+
     const advance = await Advance.create({
       hostelId: resolved.hostelId,
       prefectStudentId,
       month,
       takenAmount: numericTakenAmount,
-      closedAmount: numericClosedAmount,
+      closedAmount: resolvedClosedAmount,
+      settlements: settlementValidation.settlements,
       billDates: billDateValidation.billDates,
       chequeDetails: String(chequeDetails || "").trim(),
       createdBy: req.user._id,
@@ -248,6 +313,26 @@ const updateAdvance = async (req, res) => {
         return res.status(400).json({ success: false, message: "closedAmount must be a non-negative number." });
       }
       advance.closedAmount = numericClosedAmount;
+    }
+
+    if (req.body.settlements !== undefined) {
+      const settlementValidation = normalizeSettlements(req.body.settlements, req.user._id);
+      if (settlementValidation.error) {
+        return res.status(400).json({ success: false, message: settlementValidation.error });
+      }
+      const hasLegacyImportedSettlement = Array.isArray(req.body.settlements)
+        ? req.body.settlements.some((row) => Boolean(row?.isLegacyImported))
+        : false;
+      const legacyClosedAmount = hasLegacyImportedSettlement ? 0 : getLegacyClosedAmount(advance);
+      advance.settlements = settlementValidation.settlements;
+      advance.closedAmount = legacyClosedAmount + sumSettlements(settlementValidation.settlements);
+    }
+
+    if (Number(advance.closedAmount || 0) > Number(advance.takenAmount || 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Settled amount cannot exceed the taken amount.",
+      });
     }
 
     if (req.body.chequeDetails !== undefined) {

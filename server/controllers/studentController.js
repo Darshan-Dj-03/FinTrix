@@ -42,7 +42,7 @@ const isOperationalStudent = (student, reqUser = null) => {
  * @desc    Creates both a User (role=student) and a linked Student profile
  *          in a single atomic-like operation.
  *
- * Body: { name, studentId, gender, hostelId?, isEBL?, eblCategory?, studentClass? }
+ * Body: { name, studentId, gender, hostelId?, isEBL?, eblCategory? }
  */
 const addStudent = async (req, res) => {
   // Use a mongoose session for transactional safety (both docs or neither)
@@ -50,7 +50,7 @@ const addStudent = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { name, studentId, gender, hostelId, isEBL, eblCategory, studentClass } = req.body;
+    const { name, studentId, gender, hostelId, isEBL, eblCategory } = req.body;
 
     // 1. Validate required fields
     if (!name || !studentId || !gender) {
@@ -124,7 +124,6 @@ const addStudent = async (req, res) => {
           gender,
           isEBL: isEBL || false,
           eblCategory: isEBL ? String(eblCategory || "").toUpperCase() : "",
-          studentClass: String(studentClass || "").trim(),
           isActive: true,
         },
       ],
@@ -150,7 +149,6 @@ const addStudent = async (req, res) => {
         hostelId: newUser.hostelId,
         isEBL: newStudent.isEBL,
         eblCategory: newStudent.eblCategory,
-        studentClass: newStudent.studentClass,
         isActive: newStudent.isActive,
         createdAt: newStudent.createdAt,
       },
@@ -200,19 +198,18 @@ const getAllStudents = async (req, res) => {
  * @desc    Update a student's gender, EBL metadata, or isActive flag.
  *          :id is the Student document _id.
  *
- * Body (all optional): { gender, isEBL, eblCategory, studentClass, isActive }
+ * Body (all optional): { gender, isEBL, eblCategory, isActive }
  */
 const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { gender, isEBL, eblCategory, studentClass, isActive } = req.body;
+    const { gender, isEBL, eblCategory, isActive } = req.body;
 
     // Build update object with only the fields provided
     const updateFields = {};
     if (gender !== undefined) updateFields.gender = gender;
     if (isEBL !== undefined) updateFields.isEBL = isEBL;
     if (eblCategory !== undefined) updateFields.eblCategory = String(eblCategory || "").toUpperCase();
-    if (studentClass !== undefined) updateFields.studentClass = String(studentClass || "").trim();
     if (isActive !== undefined) updateFields.isActive = isActive;
 
     if (updateFields.isEBL === false) {
@@ -222,7 +219,7 @@ const updateStudent = async (req, res) => {
     if (Object.keys(updateFields).length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No updatable fields provided. Accepted: gender, isEBL, eblCategory, studentClass, isActive.",
+        message: "No updatable fields provided. Accepted: gender, isEBL, eblCategory, isActive.",
       });
     }
 

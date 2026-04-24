@@ -19,9 +19,28 @@ const eblMonthlyDetailSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    claimedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     differenceAmount: {
       type: Number,
       required: true,
+    },
+    studentPaidAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    remainingBalance: {
+      type: Number,
+      default: 0,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["ebl", "partial_scholarship_received", "partial_university_claim_received", "paid"],
+      default: "ebl",
     },
     billId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -62,6 +81,11 @@ const eblPeriodSchema = new mongoose.Schema(
     monthlyGoiAmount: {
       type: Number,
       required: true,
+      min: 0,
+    },
+    universityClaimAmount: {
+      type: Number,
+      default: 0,
       min: 0,
     },
     periodUtr: {
@@ -114,7 +138,21 @@ const eblPeriodSchema = new mongoose.Schema(
         default: 0,
         min: 0,
       },
+      totalClaimedAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
       totalDifference: {
+        type: Number,
+        default: 0,
+      },
+      totalStudentPaid: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      totalRemainingBalance: {
         type: Number,
         default: 0,
       },

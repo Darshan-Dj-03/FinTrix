@@ -11,7 +11,7 @@ const eblReportSchema = new mongoose.Schema(
     },
     reportType: {
       type: String,
-      enum: ["pre_receipt", "month_wise"],
+      enum: ["pre_receipt", "month_wise", "university_claim", "university_claim_month_wise"],
       required: true,
     },
     fromMonth: {
@@ -47,6 +47,16 @@ const eblReportSchema = new mongoose.Schema(
     totalDifference: {
       type: Number,
       default: 0,
+    },
+    totalUniversityClaim: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalRemainingBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
