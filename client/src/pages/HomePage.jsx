@@ -117,18 +117,18 @@ const teamMembers = [
 
 const projectGuides = [
   {
-    name: "Project Guide 01",
+    name: "Dr Annapurna Neeralgi",
     role: "Faculty Guide",
-    initials: "PG",
-    description:
-      "With sincere gratitude for the academic support, mentorship, and guidance that helped shape the direction and quality of the Fintrix project.",
-  },
-  {
-    name: "Project Guide 02",
-    role: "Faculty Guide",
-    initials: "PG",
+    initials: "AN",
     description:
       "Thank you for the encouragement, review, and valuable insights provided throughout the planning, development, and refinement of the overall system workflow.",
+  },
+  {
+    name: "Prof. Sayeeda Anjum ",
+    role: "Faculty Guide",
+    initials: "SA",
+    description:
+      "With sincere gratitude for the academic support, mentorship, and guidance that helped shape the direction and quality of the Fintrix project.",
   },
 ];
 
