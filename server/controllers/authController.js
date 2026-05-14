@@ -6,6 +6,7 @@ const StudentSignupRequest = require("../models/StudentSignupRequest");
 const PasswordResetOtp = require("../models/PasswordResetOtp");
 const { runInTransaction } = require("../utils/transaction");
 const { sendEmail, buildEmailShell } = require("../utils/mailerService");
+const logger = require("../utils/logger");
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -560,6 +561,10 @@ const signupStudent = async (req, res) => {
     }
 
     const normalizedEmail = normalizeEmail(email);
+    logger.info("Student signup request received", {
+      email: normalizedEmail,
+      studentIdMode: String(studentIdMode || "manual").toLowerCase(),
+    });
 
     const payload = await runInTransaction(async (session) => {
       const wantsManualId = String(studentIdMode || "").toLowerCase() === "manual";
@@ -628,7 +633,20 @@ const signupStudent = async (req, res) => {
       return { user, request };
     });
 
-    await sendEmail({
+    const responseBody = {
+      success: true,
+      message: "Signup request submitted successfully. Please wait for approval.",
+      data: {
+        signupRequestId: payload.request._id,
+        studentId: payload.request.studentId,
+        isTemporaryId: payload.request.isTemporaryId,
+        approvalStatus: payload.user.approvalStatus,
+      },
+    };
+
+    res.status(201).json(responseBody);
+
+    sendEmail({
       to: normalizedEmail,
       subject: "FINTRIX signup request received",
       html: buildEmailShell({
@@ -647,23 +665,53 @@ const signupStudent = async (req, res) => {
         outro: "Please keep this student ID safe. You can sign in only after your request has been approved.",
         footerNote: "Signup request notifications are sent automatically from FINTRIX.",
       }),
-    });
+    })
+      .then((emailResult) => {
+        if (emailResult?.skipped) {
+          logger.warn("Signup confirmation email skipped", {
+            email: normalizedEmail,
+            reason: emailResult.reason,
+          });
+          return;
+        }
 
-    return res.status(201).json({
-      success: true,
-      message: "Signup request submitted successfully. Please wait for approval.",
-      data: {
-        signupRequestId: payload.request._id,
-        studentId: payload.request.studentId,
-        isTemporaryId: payload.request.isTemporaryId,
-        approvalStatus: payload.user.approvalStatus,
-      },
+        if (!emailResult?.success) {
+          logger.warn("Signup confirmation email failed", {
+            email: normalizedEmail,
+            reason: emailResult?.error || "Unknown email failure",
+          });
+          return;
+        }
+
+        logger.info("Signup confirmation email sent", {
+          email: normalizedEmail,
+          messageId: emailResult.messageId,
+        });
+      })
+      .catch((emailError) => {
+        logger.error("Unexpected signup email error", {
+          email: normalizedEmail,
+          error: emailError.message,
+          stack: emailError.stack,
+        });
+      });
+
+    logger.info("Student signup request created", {
+      email: normalizedEmail,
+      signupRequestId: String(payload.request._id),
+      studentId: payload.request.studentId,
+      isTemporaryId: payload.request.isTemporaryId,
     });
+    return;
   } catch (error) {
     if (error.code === 11000 || error.status === 409) {
       return res.status(409).json({ success: false, message: error.message || "Duplicate signup request." });
     }
 
+    logger.error("Student signup request failed", {
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(error.status || 500).json({
       success: false,
       message: error.message || "Server error.",

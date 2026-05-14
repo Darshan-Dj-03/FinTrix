@@ -6,6 +6,7 @@ const MONTH_REGEX = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}$/;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const roundCurrency = (value = 0) => Number((Number(value || 0)).toFixed(2));
+const roundBillAmount = (value = 0) => Math.ceil(Math.max(Number(value || 0), 0));
 
 const parseMonth = (month) => {
   if (!MONTH_REGEX.test(month)) {
@@ -56,6 +57,7 @@ const buildReportSource = async (hostelId, month) => {
     veg: roundCurrency(hostelExpense.veg || 0),
     milk: roundCurrency(hostelExpense.milk || 0),
     cylinder: roundCurrency(hostelExpense.cylinder || 0),
+    internet: roundCurrency(hostelExpense.internet || 0),
     elp: roundCurrency(hostelExpense.elp || 0),
   };
 
@@ -87,7 +89,7 @@ const buildReportSource = async (hostelId, month) => {
   );
 
   const electricity_bill = roundCurrency(hostelExpense.keb_total || 0);
-  const internet = roundCurrency(hostelExpense.elp || 0);
+  const internet = roundCurrency(hostelExpense.internet || 0);
   const labour_payment = roundCurrency(
     Number(hostelExpense.labour_bill || 0) + Number(hostelExpense.labour_night_watch || 0)
   );
@@ -124,7 +126,7 @@ const calculateMonthlyExpenseReport = ({ source, opening_balance = 0, manual_clo
   const total_opening_balance = roundCurrency(total_closing_balance - Number(opening_balance || 0));
   const total_expenditure = roundCurrency(total_opening_balance - Number(source.guest_charge_total || 0));
   const mess_bill_per_day =
-    source.total_days > 0 ? roundCurrency(total_expenditure / source.total_days) : 0;
+    source.total_days > 0 ? roundBillAmount(total_expenditure / source.total_days) : 0;
 
   return {
     msc_total: source.msc_total,

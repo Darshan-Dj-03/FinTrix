@@ -14,7 +14,6 @@ export const blankHostelExpenseBill = () => ({
 });
 
 export const hostelExpenseBreakdownLabels = {
-  elp: "ELP",
   chicken: "Chicken",
   cylinder: "Cylinder",
   keb_total: "KEB Total",
@@ -24,6 +23,8 @@ export const hostelExpenseBreakdownLabels = {
   labour_bill: "Labour Bill",
   labour_night_watch: "Labour Night Watch",
   hostel_fund: "Hostel Fund",
+  internet: "Internet",
+  elp: "Others",
   milling: "Milling",
   veg: "Veg",
   banana: "Banana",
@@ -153,7 +154,6 @@ export function calculateHostelExpense(values = {}) {
 
 export const hostelExpenseDefaultValues = {
   month: "",
-  elp: 0,
   chicken: 0,
   cylinder: 0,
   keb_total: 0,
@@ -163,6 +163,8 @@ export const hostelExpenseDefaultValues = {
   labour_bill: 0,
   labour_night_watch: 0,
   hostel_fund: 0,
+  internet: 0,
+  elp: 0,
   milling: 0,
   veg: 0,
   banana: 0,

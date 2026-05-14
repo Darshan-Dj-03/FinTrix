@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const logger = require("./logger");
 
 const APP_NAME = "FINTRIX";
 const ORG_NAME = "University Hostel Administration";
@@ -15,6 +16,9 @@ const getTransporter = () => {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
 
@@ -114,6 +118,12 @@ const sendEmail = async ({ to, cc, bcc, subject, html, attachments = [] }) => {
 
     return { success: true, messageId: info.messageId };
   } catch (error) {
+    logger.error("Email send failed", {
+      error: error.message,
+      stack: error.stack,
+      to,
+      subject,
+    });
     return { success: false, error: error.message };
   }
 };

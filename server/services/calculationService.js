@@ -51,10 +51,10 @@ const calculateAbsenceDeduction = ({ absentDays, daysInMonth, perDayMessBill, mo
   }
 
   if (safeAbsentDays <= 9) {
-    return roundTwoDecimals(safeAbsentDays * 10);
+    return roundUpCurrency(safeAbsentDays * 10);
   }
 
-  return roundTwoDecimals(safeAbsentDays * safePerDayMessBill);
+  return roundUpCurrency(safeAbsentDays * safePerDayMessBill);
 };
 
 /**
@@ -173,10 +173,10 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
   const hasExplicitMilkAmounts = consumptionRecords.some((record) => Number(record.milk_amount || 0) > 0);
   const daysInMonth = getDaysInMonth(expense.month);
   const baseMessMonthly = expense.mess_bill_per_day
-    ? roundTwoDecimals(expense.mess_bill_per_day * daysInMonth)
+    ? roundUpCurrency(expense.mess_bill_per_day * daysInMonth)
     : expense.mess_bill_total
-      ? roundTwoDecimals(expense.mess_bill_total)
-      : roundTwoDecimals(
+      ? roundUpCurrency(expense.mess_bill_total)
+      : roundUpCurrency(
           expense.elp
             + expense.cylinder
             + expense.oil
@@ -185,9 +185,9 @@ const generateMessBills = (expense, students, consumptionRecords = [], options =
         );
   const derivedMessBillPerDay =
     Number(expense.mess_bill_per_day || 0) > 0
-      ? Number(expense.mess_bill_per_day || 0)
+      ? roundUpCurrency(expense.mess_bill_per_day || 0)
       : daysInMonth > 0
-        ? roundTwoDecimals(baseMessMonthly / daysInMonth)
+        ? roundUpCurrency(baseMessMonthly / daysInMonth)
         : 0;
 
   // KEB (electricity) – split by gender

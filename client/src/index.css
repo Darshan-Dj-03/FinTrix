@@ -321,6 +321,15 @@
   .auth-stage-panel-enter.auth-stage-panel-login {
     animation-name: auth-panel-enter-from-left;
   }
+
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer components {

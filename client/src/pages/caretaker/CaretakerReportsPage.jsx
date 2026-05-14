@@ -6,6 +6,7 @@ import { useLocation } from "react-router-dom";
 import { billApi } from "../../api/billApi";
 import { eblApi } from "../../api/eblApi";
 import { expenseApi } from "../../api/expenseApi";
+import { hostelDepositApi } from "../../api/hostelDepositApi";
 import { hostelExpenseApi } from "../../api/hostelExpenseApi";
 import { monthlyExpenseReportApi } from "../../api/monthlyExpenseReportApi";
 import { reportApi } from "../../api/reportApi";
@@ -21,6 +22,8 @@ import { useHostelExpenseDownload } from "../../hooks/useHostelExpenseDownload";
 import { useMonthlyExpenseReportDownload } from "../../hooks/useMonthlyExpenseReportDownload";
 import { useExpenseDownload } from "../../hooks/useExpenseDownload";
 import { useBillBreakdownReportDownload } from "../../hooks/useBillBreakdownReportDownload";
+import { useHostelDepositReportDownload } from "../../hooks/useHostelDepositReportDownload";
+import { getAcademicYearOptions, getDefaultAcademicYear } from "../../utils/academicYears";
 import { CURRENT_MONTH } from "../../utils/constants";
 import { formatCurrency } from "../../utils/formatters";
 
@@ -43,10 +46,15 @@ const getApprovalStatusMeta = (row) => {
 export function CaretakerReportsPage() {
   const location = useLocation();
   const [month, setMonth] = useState(location.state?.month || CURRENT_MONTH);
+  const [hostelDepositAcademicYear, setHostelDepositAcademicYear] = useState(
+    location.state?.academicYear || getDefaultAcademicYear()
+  );
+  const academicYearOptions = getAcademicYearOptions();
   const downloadReport = useMonthlyExpenseReportDownload();
   const downloadHostelExpense = useHostelExpenseDownload();
   const downloadExpense = useExpenseDownload();
   const downloadMessBillPerStudent = useBillBreakdownReportDownload();
+  const downloadHostelDepositReport = useHostelDepositReportDownload();
   const monthlyExpenseReportsQuery = useQuery({
     queryKey: ["caretaker-monthly-expense-reports"],
     queryFn: () => monthlyExpenseReportApi.list(),
@@ -99,6 +107,13 @@ export function CaretakerReportsPage() {
   const statusQuery = useQuery({
     queryKey: ["caretaker-report-status-page-2", month],
     queryFn: () => reportApi.getStatus(month),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  const hostelDepositReportQuery = useQuery({
+    queryKey: ["caretaker-hostel-deposit-report", hostelDepositAcademicYear],
+    queryFn: () => hostelDepositApi.yearlyReport(hostelDepositAcademicYear),
+    enabled: Boolean(hostelDepositAcademicYear),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
@@ -226,12 +241,23 @@ export function CaretakerReportsPage() {
     ...hostelExpenseReportRows,
     ...messBillPerStudentRows,
     ...eblReportRows,
+    {
+      _id: `hostel-deposit-yearly-${hostelDepositAcademicYear}`,
+      month: hostelDepositAcademicYear,
+      report_name: "Hostel Deposit Yearly Report",
+      report_type: "hostel_deposit_yearly",
+      status: "available",
+      total_students: hostelDepositReportQuery.data?.summary?.totalStudents || 0,
+      total_received: hostelDepositReportQuery.data?.summary?.totalReceived || 0,
+      total_available: hostelDepositReportQuery.data?.summary?.totalAvailable || 0,
+      academicYear: hostelDepositAcademicYear,
+    },
   ];
 
-  if (reportQuery.isLoading || statusQuery.isLoading || monthlyExpenseReportsQuery.isLoading || hostelExpenseQuery.isLoading || expenseSnapshotQuery.isLoading || messBillPerStudentQuery.isLoading || eblReportsQuery.isLoading) {
+  if (reportQuery.isLoading || statusQuery.isLoading || monthlyExpenseReportsQuery.isLoading || hostelExpenseQuery.isLoading || expenseSnapshotQuery.isLoading || messBillPerStudentQuery.isLoading || eblReportsQuery.isLoading || hostelDepositReportQuery.isLoading) {
     return <LoadingState label="Loading report center..." />;
   }
-  if (reportQuery.isError || statusQuery.isError || monthlyExpenseReportsQuery.isError || hostelExpenseQuery.isError || expenseSnapshotQuery.isError || messBillPerStudentQuery.isError || eblReportsQuery.isError) {
+  if (reportQuery.isError || statusQuery.isError || monthlyExpenseReportsQuery.isError || hostelExpenseQuery.isError || expenseSnapshotQuery.isError || messBillPerStudentQuery.isError || eblReportsQuery.isError || hostelDepositReportQuery.isError) {
     return (
       <ErrorState
         description="Unable to load report center."
@@ -243,6 +269,7 @@ export function CaretakerReportsPage() {
           expenseSnapshotQuery.refetch();
           messBillPerStudentQuery.refetch();
           eblReportsQuery.refetch();
+          hostelDepositReportQuery.refetch();
         }}
       />
     );
@@ -260,6 +287,19 @@ export function CaretakerReportsPage() {
           </div>
         }
       />
+
+      <div className="panel p-4">
+        <div className="w-full max-w-sm">
+          <label className="field-label">Hostel deposit academic year</label>
+          <select className="input" value={hostelDepositAcademicYear} onChange={(event) => setHostelDepositAcademicYear(event.target.value)}>
+            {academicYearOptions.map((academicYear) => (
+              <option key={academicYear} value={academicYear}>
+                {academicYear}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <DataTable
         rows={combinedReportRows}
@@ -296,6 +336,8 @@ export function CaretakerReportsPage() {
                 ? `Total: ${formatCurrency(row.total_expenditure)} | Per Day: ${formatCurrency(row.mess_bill_per_day)}`
                 : row.report_type === "expense_snapshot"
                   ? `Mess Bill: ${formatCurrency(row.mess_bill_total)} | Static: ${formatCurrency(row.dynamic_charge_total)}`
+                : row.report_type === "hostel_deposit_yearly"
+                  ? `${row.total_students} accepted deposits | Received: ${formatCurrency(row.total_received)} | Available: ${formatCurrency(row.total_available)}`
                 : row.report_type === "mess_bill_per_student"
                   ? `${row.total_students} saved student bill rows`
                   : `Updated: ${new Date(row.updatedAt || row.createdAt).toLocaleDateString()}`,
@@ -304,20 +346,24 @@ export function CaretakerReportsPage() {
             key: "submit",
             label: "Submit",
             render: (row) => (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={row.status !== "draft" || submitNamedReportMutation.isPending}
-                onClick={() =>
-                  submitNamedReportMutation.mutate({
-                    reportType: row.report_type,
-                    month: row.report_type === "ebl_report" ? row._id : row.month,
-                  })
-                }
-                >
-                  {row.status === "draft" ? "Submit" : row.status.replaceAll("_", " ")}
-                </Button>
+              row.report_type === "hostel_deposit_yearly" ? (
+                "-"
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={row.status !== "draft" || submitNamedReportMutation.isPending}
+                  onClick={() =>
+                    submitNamedReportMutation.mutate({
+                      reportType: row.report_type,
+                      month: row.report_type === "ebl_report" ? row._id : row.month,
+                    })
+                  }
+                  >
+                    {row.status === "draft" ? "Submit" : row.status.replaceAll("_", " ")}
+                  </Button>
+              )
             ),
           },
           {
@@ -340,6 +386,8 @@ export function CaretakerReportsPage() {
                           link.click();
                           window.URL.revokeObjectURL(url);
                         })
+                    : row.report_type === "hostel_deposit_yearly"
+                      ? downloadHostelDepositReport(row.academicYear)
                     : row.report_type === "expense_snapshot"
                       ? downloadExpense(row.month)
                       : row.report_type === "mess_bill_per_student"

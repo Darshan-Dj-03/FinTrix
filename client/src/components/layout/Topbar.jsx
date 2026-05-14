@@ -32,7 +32,7 @@ export function Topbar() {
   const user = useAuthStore((state) => state.user);
   const studentProfile = useAuthStore((state) => state.studentProfile);
   const logout = useAuthStore((state) => state.logout);
-  const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const toggleMobileSidebar = useUiStore((state) => state.toggleMobileSidebar);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const notificationRef = useRef(null);
@@ -97,7 +97,7 @@ export function Topbar() {
           <button
             type="button"
             className="rounded-2xl border border-slate-200 p-2 text-slate-500 xl:hidden"
-            onClick={toggleSidebar}
+            onClick={toggleMobileSidebar}
           >
             <Menu size={18} />
           </button>

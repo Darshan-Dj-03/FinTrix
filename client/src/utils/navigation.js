@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListOrdered,
   Receipt,
+  FileBadge,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -21,6 +22,8 @@ export const navigationByRole = {
     { label: "Bills", to: "/student/bills", icon: Receipt },
     { label: "Payments", to: "/student/payments", icon: CreditCard },
     { label: "EBL Status", to: "/student/ebl", icon: ShieldCheck },
+    { label: "Hostel Deposit", to: "/student/hostel-deposit", icon: Landmark },
+    { label: "NOC", to: "/student/noc", icon: FileBadge },
   ],
   caretaker: [
     { label: "Overview", to: "/caretaker", icon: LayoutDashboard },
@@ -35,6 +38,8 @@ export const navigationByRole = {
     { label: "Bills", to: "/caretaker/bills", icon: Receipt },
     { label: "Mess Bill / Student", to: "/caretaker/mess-bill-per-student", icon: ScrollText },
     { label: "Payments", to: "/caretaker/payments", icon: WalletCards },
+    { label: "Hostel Deposit", to: "/caretaker/hostel-deposit", icon: Landmark },
+    { label: "NOC", to: "/caretaker/noc", icon: FileBadge },
     { label: "Reports", to: "/caretaker/reports", icon: ScrollText },
   ],
   admin: [

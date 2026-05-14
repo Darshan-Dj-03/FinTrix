@@ -266,11 +266,12 @@ const syncExpenseSnapshot = async ({ hostelId, month, userId }) => {
   const payload = {
     month,
     hostelId,
-    elp: 0,
     cylinder: 0,
     oil: 0,
     kirana: 0,
     milk: 0,
+    internet: roundCurrency(hostelExpense.internet || 0),
+    elp: roundCurrency(hostelExpense.elp || 0),
     milk_total: roundCurrency(totals.milk_amount),
     keb_total: roundCurrency(hostelExpense.keb_total || 0),
     keb_girls: roundCurrency(hostelExpense.keb_girls || 0),
@@ -932,7 +933,6 @@ const downloadHostelExpensePdf = async (req, res) => {
         { label: "Amount", width: 170, key: "amount", align: "right" },
       ],
       rows: [
-        { particular: "ELP", amount: formatCurrency(record.elp || 0) },
         { particular: "Chicken", amount: formatCurrency(record.chicken || 0) },
         { particular: "Cylinder", amount: formatCurrency(record.cylinder || 0) },
         { particular: "KEB Total", amount: formatCurrency(record.keb_total || 0) },
@@ -944,6 +944,8 @@ const downloadHostelExpensePdf = async (req, res) => {
         { particular: "Labour Bill", amount: formatCurrency(record.labour_bill || 0) },
         { particular: "Labour Night Watch", amount: formatCurrency(record.labour_night_watch || 0) },
         { particular: "Hostel Fund", amount: formatCurrency(record.hostel_fund || 0) },
+        { particular: "Internet", amount: formatCurrency(record.internet || 0) },
+        { particular: "Others", amount: formatCurrency(record.elp || 0) },
       ],
       fontSize: 10,
     });

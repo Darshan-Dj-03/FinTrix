@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
+import { calculateLateFinePreview, getDelayDays } from "../../utils/finePreview";
 import { formatCurrency, formatDate } from "../../utils/formatters";
 
 const getStudentSortValue = (row) => {
@@ -16,20 +17,6 @@ const getStudentSortValue = (row) => {
   }
 
   return Number.MAX_SAFE_INTEGER;
-};
-
-const getDelayDays = (dueDate, paymentMadeDate) => {
-  if (!dueDate || !paymentMadeDate) {
-    return 0;
-  }
-
-  const due = new Date(dueDate);
-  const paid = new Date(paymentMadeDate);
-  due.setHours(0, 0, 0, 0);
-  paid.setHours(0, 0, 0, 0);
-
-  const diffMs = paid.getTime() - due.getTime();
-  return diffMs > 0 ? Math.floor(diffMs / (24 * 60 * 60 * 1000)) : 0;
 };
 
 export function PaymentForm({ bills = [], onSubmit, loading }) {
@@ -79,7 +66,17 @@ export function PaymentForm({ bills = [], onSubmit, loading }) {
   const isUpiWithoutUtr = selectedPaymentMethod === "upi" && !selectedBillUtr;
   const selectedBillOutstanding = Number(selectedBill?.outstanding_amount ?? selectedBill?.ebl_remaining_balance ?? 0);
   const selectedBillFine = Number(selectedBill?.fine || 0);
+  const selectedBillManualFine = Number(selectedBill?.manual_fine || 0);
   const selectedBillDelayDays = getDelayDays(selectedBill?.due_date, selectedPaymentMadeDate);
+  const selectedBillLateFinePreview = selectedBill?.is_ebl_student
+    ? 0
+    : calculateLateFinePreview(selectedBill?.due_date, selectedPaymentMadeDate);
+  const selectedBillOtherFine = Math.max(selectedBillFine - selectedBillLateFinePreview, selectedBillManualFine, 0);
+  const selectedBillFineAlertAmount = Math.max(
+    selectedBillFine,
+    selectedBillManualFine + selectedBillLateFinePreview,
+    selectedBillOtherFine + selectedBillLateFinePreview
+  );
 
   useEffect(() => {
     if (!selectedBill) {
@@ -124,7 +121,7 @@ export function PaymentForm({ bills = [], onSubmit, loading }) {
   };
 
   const submit = (values) => {
-    if (selectedBillFine > 0 && selectedBillDelayDays > 0) {
+    if (selectedBillFineAlertAmount > 0) {
       setFinePrompt(values);
       return;
     }
@@ -190,10 +187,29 @@ export function PaymentForm({ bills = [], onSubmit, loading }) {
                 {selectedBill?.student_payment_made_date ? formatDate(selectedBill.student_payment_made_date) : "Not entered by student"}
               </span>
             </p>
-            {selectedBillFine > 0 ? (
+            {selectedBillFineAlertAmount > 0 ? (
               <p className="mt-2 text-amber-700">
-                Fine present: {selectedBillDelayDays} delay day{selectedBillDelayDays === 1 ? "" : "s"} and fine amount {formatCurrency(selectedBillFine)}.
+                Fine alert: total fine {formatCurrency(selectedBillFineAlertAmount)}
+                {selectedBillDelayDays > 0
+                  ? ` across ${selectedBillDelayDays} delay day${selectedBillDelayDays === 1 ? "" : "s"}.`
+                  : "."}
               </p>
+            ) : null}
+            {selectedBillFineAlertAmount > 0 ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <p>
+                  Manual / other fine:{" "}
+                  <span className="font-semibold text-slate-800">{formatCurrency(selectedBillOtherFine)}</span>
+                </p>
+                <p>
+                  Late fine preview:{" "}
+                  <span className="font-semibold text-slate-800">{formatCurrency(selectedBillLateFinePreview)}</span>
+                </p>
+                <p>
+                  Total fine:{" "}
+                  <span className="font-semibold text-slate-800">{formatCurrency(selectedBillFineAlertAmount)}</span>
+                </p>
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -218,11 +234,17 @@ export function PaymentForm({ bills = [], onSubmit, loading }) {
                 <span className="font-semibold">Delay days:</span> {selectedBillDelayDays}
               </p>
               <p>
-                <span className="font-semibold">Fine amount:</span> {formatCurrency(selectedBillFine)}
+                <span className="font-semibold">Manual / other fine:</span> {formatCurrency(selectedBillOtherFine)}
+              </p>
+              <p>
+                <span className="font-semibold">Late fine preview:</span> {formatCurrency(selectedBillLateFinePreview)}
+              </p>
+              <p>
+                <span className="font-semibold">Total fine amount:</span> {formatCurrency(selectedBillFineAlertAmount)}
               </p>
             </div>
             <p className="mt-4 text-sm text-slate-500">
-              Continue only if you want to process the payment with this fine applied.
+              Continue only if you want to process the payment after reviewing the student's fine details.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <Button type="button" variant="ghost" onClick={() => setFinePrompt(null)}>

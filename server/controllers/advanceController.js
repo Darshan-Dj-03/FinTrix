@@ -83,10 +83,26 @@ const normalizeSettlements = (settlements = [], recordedBy = null) => {
       return { error: "Each settlement date must be a valid date." };
     }
 
+    const normalizedPaymentMode =
+      row?.paymentMode === undefined || row?.paymentMode === null
+        ? ""
+        : String(row.paymentMode).trim().toLowerCase();
+    const utrNumber = String(row?.utrNumber || "").trim();
+    const paymentMode = normalizedPaymentMode || (utrNumber ? "upi" : "");
+    if (!["cash", "upi", ""].includes(paymentMode)) {
+      return { error: "Each settlement payment mode must be cash or upi." };
+    }
+
+    if (paymentMode === "upi" && !utrNumber) {
+      return { error: "UTR number is required for UPI settlements." };
+    }
+
     normalized.push({
       settlementDate: parsedDate,
       amount: numericAmount,
       notes: String(row?.notes || "").trim(),
+      paymentMode,
+      utrNumber: paymentMode === "upi" ? utrNumber : "",
       recordedBy: row?.recordedBy || recordedBy || null,
       isLegacyImported: Boolean(row?.isLegacyImported),
     });

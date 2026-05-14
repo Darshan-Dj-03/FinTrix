@@ -78,7 +78,7 @@ const populateConfig = [
   {
     path: "hostelExpenseId",
     select:
-      "month kirani oil milling veg milk cylinder elp chicken_total_misc paneer_total egg_total banana bakery",
+      "month kirani oil milling veg milk cylinder internet elp chicken_total_misc paneer_total egg_total banana bakery",
   },
 ];
 

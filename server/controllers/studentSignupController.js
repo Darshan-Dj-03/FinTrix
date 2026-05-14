@@ -7,6 +7,7 @@ const StudentSignupRequest = require("../models/StudentSignupRequest");
 const { runInTransaction } = require("../utils/transaction");
 const { createAuditLog } = require("../services/auditService");
 const { sendEmail, buildEmailShell } = require("../utils/mailerService");
+const logger = require("../utils/logger");
 
 const REQUEST_POPULATE = [
   { path: "userId", select: "name email phoneNumber username approvalStatus createdAt" },
@@ -16,6 +17,20 @@ const REQUEST_POPULATE = [
 ];
 
 const normalizeCategory = (value = "") => String(value || "").trim().toUpperCase();
+
+const sendSignupNotificationAsync = (emailJob) => {
+  if (!emailJob) {
+    return;
+  }
+
+  sendEmail(emailJob).catch((error) => {
+    logger.warn("Signup notification email failed", {
+      to: emailJob.to,
+      subject: emailJob.subject,
+      error: error.message,
+    });
+  });
+};
 
 const serializeRequest = (request) => ({
   id: request._id,
@@ -210,34 +225,37 @@ const caretakerRejectSignup = async (req, res) => {
         session,
       });
 
-      if (user.email) {
-        await sendEmail({
-          to: user.email,
-          subject: "FINTRIX signup request update",
-          html: buildEmailShell({
-            title: "Signup Request Rejected",
-            preheader: "Your signup request was rejected during caretaker review.",
-            greeting: `Dear ${user.name || "Student"},`,
-            intro: "Your student signup request was rejected during caretaker review in FINTRIX.",
-            highlight: `Student ID: ${request.studentId}`,
-            rows: [
-              { label: "Review Stage", value: "Caretaker review" },
-              { label: "Reason", value: request.rejectionReason || "No reason provided" },
-            ],
-            outro: "If you need clarification, please contact the hostel office before submitting a fresh request.",
-            footerNote: "Signup review notifications are generated automatically from FINTRIX.",
-          }),
-        });
-      }
-
-      return StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session);
+      return {
+        request: await StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session),
+        emailJob: user.email
+          ? {
+              to: user.email,
+              subject: "FINTRIX signup request update",
+              html: buildEmailShell({
+                title: "Signup Request Rejected",
+                preheader: "Your signup request was rejected during caretaker review.",
+                greeting: `Dear ${user.name || "Student"},`,
+                intro: "Your student signup request was rejected during caretaker review in FINTRIX.",
+                highlight: `Student ID: ${request.studentId}`,
+                rows: [
+                  { label: "Review Stage", value: "Caretaker review" },
+                  { label: "Reason", value: request.rejectionReason || "No reason provided" },
+                ],
+                outro: "If you need clarification, please contact the hostel office before submitting a fresh request.",
+                footerNote: "Signup review notifications are generated automatically from FINTRIX.",
+              }),
+            }
+          : null,
+      };
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Signup request rejected.",
-      data: serializeRequest(payload),
+      data: serializeRequest(payload.request),
     });
+    sendSignupNotificationAsync(payload.emailJob);
+    return;
   } catch (error) {
     return res.status(error.status || 500).json({
       success: false,
@@ -319,35 +337,38 @@ const adminApproveSignup = async (req, res) => {
         session,
       });
 
-      if (user.email) {
-        await sendEmail({
-          to: user.email,
-          subject: "FINTRIX signup approved",
-          html: buildEmailShell({
-            title: "Signup Approved",
-            preheader: "Your student account has been approved.",
-            greeting: `Dear ${user.name || "Student"},`,
-            intro: "Your FINTRIX student account has been approved successfully. You can now sign in using your student ID and chosen password.",
-            highlight: `Approved Student ID: ${request.studentId}`,
-            rows: [
-              { label: "Hostel", value: "Assigned hostel" },
-              { label: "EBL Status", value: request.assignedIsEBL ? `Yes${request.assignedEblCategory ? ` (${request.assignedEblCategory})` : ""}` : "No" },
-              { label: "Status", value: "Approved" },
-            ],
-            outro: "Use your student ID and password on the FINTRIX sign-in page to access your account.",
-            footerNote: "Approval notifications are sent automatically from FINTRIX.",
-          }),
-        });
-      }
-
-      return StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session);
+      return {
+        request: await StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session),
+        emailJob: user.email
+          ? {
+              to: user.email,
+              subject: "FINTRIX signup approved",
+              html: buildEmailShell({
+                title: "Signup Approved",
+                preheader: "Your student account has been approved.",
+                greeting: `Dear ${user.name || "Student"},`,
+                intro: "Your FINTRIX student account has been approved successfully. You can now sign in using your student ID and chosen password.",
+                highlight: `Approved Student ID: ${request.studentId}`,
+                rows: [
+                  { label: "Hostel", value: "Assigned hostel" },
+                  { label: "EBL Status", value: request.assignedIsEBL ? `Yes${request.assignedEblCategory ? ` (${request.assignedEblCategory})` : ""}` : "No" },
+                  { label: "Status", value: "Approved" },
+                ],
+                outro: "Use your student ID and password on the FINTRIX sign-in page to access your account.",
+                footerNote: "Approval notifications are sent automatically from FINTRIX.",
+              }),
+            }
+          : null,
+      };
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Student signup approved successfully.",
-      data: serializeRequest(payload),
+      data: serializeRequest(payload.request),
     });
+    sendSignupNotificationAsync(payload.emailJob);
+    return;
   } catch (error) {
     return res.status(error.status || 500).json({
       success: false,
@@ -409,34 +430,37 @@ const adminRejectSignup = async (req, res) => {
         session,
       });
 
-      if (user.email) {
-        await sendEmail({
-          to: user.email,
-          subject: "FINTRIX signup request update",
-          html: buildEmailShell({
-            title: "Signup Request Rejected",
-            preheader: "Your signup request was rejected during admin review.",
-            greeting: `Dear ${user.name || "Student"},`,
-            intro: "Your student signup request was rejected during admin review in FINTRIX.",
-            highlight: `Student ID: ${request.studentId}`,
-            rows: [
-              { label: "Review Stage", value: "Admin review" },
-              { label: "Reason", value: request.rejectionReason || "No reason provided" },
-            ],
-            outro: "If you need clarification, please contact the hostel office before submitting a fresh request.",
-            footerNote: "Signup review notifications are generated automatically from FINTRIX.",
-          }),
-        });
-      }
-
-      return StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session);
+      return {
+        request: await StudentSignupRequest.findById(request._id).populate(REQUEST_POPULATE).session(session),
+        emailJob: user.email
+          ? {
+              to: user.email,
+              subject: "FINTRIX signup request update",
+              html: buildEmailShell({
+                title: "Signup Request Rejected",
+                preheader: "Your signup request was rejected during admin review.",
+                greeting: `Dear ${user.name || "Student"},`,
+                intro: "Your student signup request was rejected during admin review in FINTRIX.",
+                highlight: `Student ID: ${request.studentId}`,
+                rows: [
+                  { label: "Review Stage", value: "Admin review" },
+                  { label: "Reason", value: request.rejectionReason || "No reason provided" },
+                ],
+                outro: "If you need clarification, please contact the hostel office before submitting a fresh request.",
+                footerNote: "Signup review notifications are generated automatically from FINTRIX.",
+              }),
+            }
+          : null,
+      };
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Signup request rejected.",
-      data: serializeRequest(payload),
+      data: serializeRequest(payload.request),
     });
+    sendSignupNotificationAsync(payload.emailJob);
+    return;
   } catch (error) {
     return res.status(error.status || 500).json({
       success: false,

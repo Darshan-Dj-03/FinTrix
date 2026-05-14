@@ -63,7 +63,14 @@ export function StudentSignupForm({ onBackToSignIn }) {
         confirmPassword: "",
       });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || "Unable to submit signup request."),
+    onError: (error) => {
+      const timedOut = error?.code === "ECONNABORTED" || /timeout/i.test(String(error?.message || ""));
+      toast.error(
+        timedOut
+          ? "The server took too long to respond. Please try again in a few seconds."
+          : error?.response?.data?.message || "Unable to submit signup request."
+      );
+    },
   });
 
   const handleCopyStudentId = async () => {

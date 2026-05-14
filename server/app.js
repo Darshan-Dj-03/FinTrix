@@ -20,6 +20,8 @@ const chargeRoutes = require("./routes/chargeRoutes");
 const guestChargeRoutes = require("./routes/guestChargeRoutes");
 const advanceRoutes = require("./routes/advanceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const nocRoutes = require("./routes/nocRoutes");
+const hostelDepositRoutes = require("./routes/hostelDepositRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const sanitizeRequest = require("./middleware/sanitizeMiddleware");
@@ -101,6 +103,8 @@ app.use("/charges", chargeRoutes);
 app.use("/guest-charge", guestChargeRoutes);
 app.use("/advances", advanceRoutes);
 app.use("/payment", paymentRoutes);
+app.use("/noc", nocRoutes);
+app.use("/hostel-deposit", hostelDepositRoutes);
 app.use("/analytics", analyticsRoutes);
 app.use("/notifications", notificationRoutes);
 

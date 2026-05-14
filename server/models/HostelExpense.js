@@ -66,7 +66,6 @@ const hostelExpenseSchema = new mongoose.Schema(
       match: [monthPattern, 'month must be in "Mon-YYYY" format (e.g. Jan-2026).'],
     },
 
-    elp: { type: Number, default: 0, min: 0 },
     chicken: { type: Number, default: 0, min: 0 },
     cylinder: { type: Number, default: 0, min: 0 },
     keb_total: { type: Number, default: 0, min: 0 },
@@ -82,6 +81,8 @@ const hostelExpenseSchema = new mongoose.Schema(
     labour_per_student: { type: Number, default: 0, min: 0 },
     labour_night_watch_per_girl: { type: Number, default: 0, min: 0 },
     hostel_fund: { type: Number, default: 0, min: 0 },
+    internet: { type: Number, default: 0, min: 0 },
+    elp: { type: Number, default: 0, min: 0 },
 
     milling: { type: Number, default: 0, min: 0 },
     veg: { type: Number, default: 0, min: 0 },

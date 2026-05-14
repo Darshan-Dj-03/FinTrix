@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 45000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -22,6 +23,7 @@ const refreshAccessToken = async () => {
     `${API_BASE_URL}/auth/refresh`,
     { refreshToken },
     {
+      timeout: 45000,
       headers: {
         "Content-Type": "application/json",
       },

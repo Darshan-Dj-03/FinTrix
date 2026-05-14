@@ -28,6 +28,20 @@ const advanceSettlementSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    paymentMode: {
+      type: String,
+      enum: {
+        values: ["cash", "upi", ""],
+        message: 'paymentMode must be "cash" or "upi".',
+      },
+      default: "",
+    },
+    utrNumber: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: [100, "utrNumber cannot exceed 100 characters."],
+    },
     recordedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

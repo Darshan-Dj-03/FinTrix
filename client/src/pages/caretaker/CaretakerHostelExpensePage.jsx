@@ -30,7 +30,6 @@ import { CURRENT_MONTH } from "../../utils/constants";
 import { formatCurrency } from "../../utils/formatters";
 
 const CORE_ROWS = [
-  ["elp", "ELP"],
   ["chicken", "Chicken"],
   ["cylinder", "Cylinder"],
   ["keb_total", "KEB Total"],
@@ -40,6 +39,8 @@ const CORE_ROWS = [
   ["labour_bill", "Labour Bill"],
   ["labour_night_watch", "Labour Night Watch"],
   ["hostel_fund", "Hostel Fund"],
+  ["internet", "Internet"],
+  ["elp", "Others"],
 ];
 
 const MISC_ROWS = [
@@ -62,7 +63,8 @@ const MSC_BREAKDOWN_ROWS = [
   ["veg", "Veg"],
   ["milk", "Milk"],
   ["cylinder", "Cylinder"],
-  ["elp", "ELP"],
+  ["internet", "Internet"],
+  ["elp", "Others"],
 ];
 
 const OTHER_MISC_BREAKDOWN_ROWS = [

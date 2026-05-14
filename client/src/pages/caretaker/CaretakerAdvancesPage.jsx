@@ -29,6 +29,8 @@ const defaultValues = {
 const createEmptySettlement = () => ({
   amount: "",
   settlementDate: "",
+  paymentMode: "",
+  utrNumber: "",
   notes: "",
   isLegacyImported: false,
 });
@@ -44,6 +46,8 @@ const normalizeSettlementRowsForForm = (advance) => {
   const settlements = (advance?.settlements || []).map((row) => ({
     amount: row.amount ?? "",
     settlementDate: formatDateInput(row.settlementDate),
+    paymentMode: row.paymentMode || "",
+    utrNumber: row.utrNumber || "",
     notes: row.notes || "",
     recordedBy: row.recordedBy || null,
     isLegacyImported: false,
@@ -58,6 +62,8 @@ const normalizeSettlementRowsForForm = (advance) => {
       {
         amount: advance.closedAmount ?? "",
         settlementDate: formatDateInput(advance.billDates?.[0]?.billDate || advance.updatedAt || advance.createdAt),
+        paymentMode: "",
+        utrNumber: "",
         notes: "Existing settled amount from previous record",
         recordedBy: advance.createdBy || null,
         isLegacyImported: true,
@@ -66,6 +72,15 @@ const normalizeSettlementRowsForForm = (advance) => {
   }
 
   return [];
+};
+
+const resolveSettlementPaymentMode = (row) => {
+  const paymentMode = String(row?.paymentMode || "").trim().toLowerCase();
+  if (paymentMode) {
+    return paymentMode;
+  }
+
+  return String(row?.utrNumber || "").trim() ? "upi" : "";
 };
 
 export function CaretakerAdvancesPage() {
@@ -211,6 +226,27 @@ export function CaretakerAdvancesPage() {
       return;
     }
 
+    if (
+      activeSettlements.some(
+        (row) => {
+          const paymentMode = resolveSettlementPaymentMode(row);
+          return paymentMode && !["cash", "upi"].includes(paymentMode);
+        }
+      )
+    ) {
+      toast.error("Settlement payment mode must be either cash or upi.");
+      return;
+    }
+
+    if (
+      activeSettlements.some(
+        (row) => resolveSettlementPaymentMode(row) === "upi" && !String(row.utrNumber || "").trim()
+      )
+    ) {
+      toast.error("UTR is required for UPI settlement entries.");
+      return;
+    }
+
     const settledAmount = activeSettlements.reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const takenAmount = Number(values.takenAmount || 0);
     if (settledAmount > takenAmount) {
@@ -225,8 +261,10 @@ export function CaretakerAdvancesPage() {
       chequeDetails: values.chequeDetails.trim(),
       billDates,
       settlements: activeSettlements.map((row) => ({
+        paymentMode: resolveSettlementPaymentMode(row),
         amount: Number(row.amount || 0),
         settlementDate: row.settlementDate,
+        utrNumber: resolveSettlementPaymentMode(row) === "upi" ? String(row.utrNumber || "").trim() : "",
         notes: String(row.notes || "").trim(),
         isLegacyImported: Boolean(row.isLegacyImported),
       })),
@@ -347,7 +385,7 @@ export function CaretakerAdvancesPage() {
               settlementRows.map((row, index) => (
                 <div
                   key={`settlement-${index}`}
-                  className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[0.9fr_0.9fr_1.5fr_auto]"
+                  className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[0.85fr_0.85fr_0.95fr_1.1fr_1.4fr_auto]"
                 >
                   <div>
                     <label className="field-label">Settlement Amount</label>
@@ -365,6 +403,31 @@ export function CaretakerAdvancesPage() {
                       type="date"
                       value={row.settlementDate}
                       onChange={(event) => updateSettlementRow(index, "settlementDate", event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Mode of Payment</label>
+                    <Select
+                      value={row.paymentMode}
+                      onChange={(event) => {
+                        const nextMode = event.target.value;
+                        updateSettlementRow(index, "paymentMode", nextMode);
+                        if (nextMode !== "upi") {
+                          updateSettlementRow(index, "utrNumber", "");
+                        }
+                      }}
+                    >
+                      <option value="">Select mode</option>
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="field-label">UTR</label>
+                    <Input
+                      placeholder="UPI reference number"
+                      value={row.utrNumber}
+                      onChange={(event) => updateSettlementRow(index, "utrNumber", event.target.value)}
                     />
                   </div>
                   <div>
@@ -477,6 +540,16 @@ export function CaretakerAdvancesPage() {
                   key: "notes",
                   label: "Notes",
                   render: (row) => row.notes || "-",
+                },
+                {
+                  key: "paymentMode",
+                  label: "Mode",
+                  render: (row) => (row.paymentMode ? String(row.paymentMode).toUpperCase() : "-"),
+                },
+                {
+                  key: "utrNumber",
+                  label: "UTR",
+                  render: (row) => row.utrNumber || "-",
                 },
                 {
                   key: "student",

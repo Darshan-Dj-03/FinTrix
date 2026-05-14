@@ -194,7 +194,7 @@ const generateBillPDF = async (req, res) => {
           ? [
               { particular: "Base Mess Before Absence", amount: formatCurrency(liveBill.base_mess_before_absence || 0) },
               {
-                particular: `Absence Deduction (${Number(liveBill.absent_days || 0)} days)`,
+                particular: `Absent Reduction (${Number(liveBill.absent_days || 0)} days)`,
                 amount: formatCurrency(liveBill.absence_deduction || 0),
               },
             ]
@@ -223,7 +223,7 @@ const generateBillPDF = async (req, res) => {
       { label: "Bill Amount", value: formatCurrency(liveBill.total_amount) },
       { label: "Fine", value: formatCurrency(liveBill.fine) },
       { label: "Absent Days", value: String(Number(liveBill.absent_days || 0)) },
-      { label: "Absence Deduction", value: formatCurrency(liveBill.absence_deduction || 0) },
+        { label: "Absent Reduction", value: formatCurrency(liveBill.absence_deduction || 0) },
     ];
 
     if (liveBill.is_ebl_student) {

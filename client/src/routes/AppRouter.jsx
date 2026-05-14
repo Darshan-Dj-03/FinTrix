@@ -14,6 +14,8 @@ const StudentOverviewPage = lazy(() => import("../pages/student/StudentOverviewP
 const StudentBillsPage = lazy(() => import("../pages/student/StudentBillsPage").then((module) => ({ default: module.StudentBillsPage })));
 const StudentPaymentsPage = lazy(() => import("../pages/student/StudentPaymentsPage").then((module) => ({ default: module.StudentPaymentsPage })));
 const StudentEblPage = lazy(() => import("../pages/student/StudentEblPage").then((module) => ({ default: module.StudentEblPage })));
+const StudentHostelDepositPage = lazy(() => import("../pages/student/StudentHostelDepositPage").then((module) => ({ default: module.StudentHostelDepositPage })));
+const StudentNocPage = lazy(() => import("../pages/student/StudentNocPage").then((module) => ({ default: module.StudentNocPage })));
 const CaretakerOverviewPage = lazy(() => import("../pages/caretaker/CaretakerOverviewPage").then((module) => ({ default: module.CaretakerOverviewPage })));
 const CaretakerEblPage = lazy(() => import("../pages/caretaker/CaretakerEblPage").then((module) => ({ default: module.CaretakerEblPage })));
 const CaretakerExpensesPage = lazy(() => import("../pages/caretaker/CaretakerExpensesPage").then((module) => ({ default: module.CaretakerExpensesPage })));
@@ -24,6 +26,8 @@ const CaretakerConsumptionPage = lazy(() => import("../pages/caretaker/Caretaker
 const CaretakerBillsPage = lazy(() => import("../pages/caretaker/CaretakerBillsPage").then((module) => ({ default: module.CaretakerBillsPage })));
 const CaretakerMessBillPerStudentPage = lazy(() => import("../pages/caretaker/CaretakerMessBillPerStudentPage").then((module) => ({ default: module.CaretakerMessBillPerStudentPage })));
 const CaretakerPaymentsPage = lazy(() => import("../pages/caretaker/CaretakerPaymentsPage").then((module) => ({ default: module.CaretakerPaymentsPage })));
+const CaretakerHostelDepositPage = lazy(() => import("../pages/caretaker/CaretakerHostelDepositPage").then((module) => ({ default: module.CaretakerHostelDepositPage })));
+const CaretakerNocPage = lazy(() => import("../pages/caretaker/CaretakerNocPage").then((module) => ({ default: module.CaretakerNocPage })));
 const CaretakerChargesPage = lazy(() => import("../pages/caretaker/CaretakerChargesPage").then((module) => ({ default: module.CaretakerChargesPage })));
 const CaretakerReportsPage = lazy(() => import("../pages/caretaker/CaretakerReportsPage").then((module) => ({ default: module.CaretakerReportsPage })));
 const CaretakerStudentSignupPage = lazy(() => import("../pages/caretaker/CaretakerStudentSignupPage").then((module) => ({ default: module.CaretakerStudentSignupPage })));
@@ -89,6 +93,8 @@ export function AppRouter() {
               <Route path="/student/bills" element={<StudentBillsPage />} />
               <Route path="/student/payments" element={<StudentPaymentsPage />} />
               <Route path="/student/ebl" element={<StudentEblPage />} />
+              <Route path="/student/hostel-deposit" element={<StudentHostelDepositPage />} />
+              <Route path="/student/noc" element={<StudentNocPage />} />
             </Route>
 
             <Route element={<RoleBasedRoute allowedRoles={["caretaker"]} />}>
@@ -102,6 +108,8 @@ export function AppRouter() {
               <Route path="/caretaker/bills" element={<CaretakerBillsPage />} />
               <Route path="/caretaker/mess-bill-per-student" element={<CaretakerMessBillPerStudentPage />} />
               <Route path="/caretaker/payments" element={<CaretakerPaymentsPage />} />
+              <Route path="/caretaker/hostel-deposit" element={<CaretakerHostelDepositPage />} />
+              <Route path="/caretaker/noc" element={<CaretakerNocPage />} />
               <Route path="/caretaker/charges" element={<CaretakerChargesPage />} />
               <Route path="/caretaker/reports" element={<CaretakerReportsPage />} />
               <Route path="/caretaker/student-signups" element={<CaretakerStudentSignupPage />} />

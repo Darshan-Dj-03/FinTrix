@@ -1,7 +1,6 @@
 const roundCurrency = (value = 0) => Number((Number(value || 0)).toFixed(2));
 
 const HOSTEL_EXPENSE_BREAKDOWN_FIELDS = [
-  "elp",
   "chicken",
   "cylinder",
   "keb_total",
@@ -11,6 +10,8 @@ const HOSTEL_EXPENSE_BREAKDOWN_FIELDS = [
   "labour_bill",
   "labour_night_watch",
   "hostel_fund",
+  "internet",
+  "elp",
   "milling",
   "veg",
   "banana",
@@ -135,7 +136,6 @@ const calculateHostelExpense = (payload = {}) => {
 
   return {
     bill_breakdowns,
-    elp: getBreakdownTotal(bill_breakdowns, "elp", payload.elp),
     chicken: getBreakdownTotal(bill_breakdowns, "chicken", payload.chicken),
     cylinder: getBreakdownTotal(bill_breakdowns, "cylinder", payload.cylinder),
     keb_total,
@@ -151,6 +151,8 @@ const calculateHostelExpense = (payload = {}) => {
     labour_per_student,
     labour_night_watch_per_girl,
     hostel_fund: getBreakdownTotal(bill_breakdowns, "hostel_fund", payload.hostel_fund),
+    internet: getBreakdownTotal(bill_breakdowns, "internet", payload.internet),
+    elp: getBreakdownTotal(bill_breakdowns, "elp", payload.elp),
     milling: getBreakdownTotal(bill_breakdowns, "milling", payload.milling),
     veg: getBreakdownTotal(bill_breakdowns, "veg", payload.veg),
     banana,

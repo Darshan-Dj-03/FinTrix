@@ -194,7 +194,6 @@ const buildHostelExpensePdfAttachment = async ({ record }) =>
         { label: "Amount", width: 140, key: "amount", align: "right" },
       ],
       rows: [
-        { particular: "ELP", amount: formatCurrency(record.elp) },
         { particular: "Chicken", amount: formatCurrency(record.chicken) },
         { particular: "Cylinder", amount: formatCurrency(record.cylinder) },
         { particular: "KEB Total", amount: formatCurrency(record.keb_total) },
@@ -204,6 +203,8 @@ const buildHostelExpensePdfAttachment = async ({ record }) =>
         { particular: "Labour Bill", amount: formatCurrency(record.labour_bill) },
         { particular: "Night Watch", amount: formatCurrency(record.labour_night_watch) },
         { particular: "Hostel Fund", amount: formatCurrency(record.hostel_fund) },
+        { particular: "Internet", amount: formatCurrency(record.internet) },
+        { particular: "Others", amount: formatCurrency(record.elp) },
       ],
       redrawHeader: renderHeader,
       fontSize: 10,

@@ -38,7 +38,7 @@ export function BillCard({ bill, onDownload }) {
           <p className="mt-2 text-lg font-semibold text-slate-800">{Number(bill.absent_days || 0)}</p>
         </div>
         <div className="panel-soft p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Absence Deduction</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Absent Reduction</p>
           <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.absence_deduction || 0)}</p>
         </div>
         <div className="panel-soft p-4">

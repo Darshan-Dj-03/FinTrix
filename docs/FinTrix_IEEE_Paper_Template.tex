@@ -1,0 +1,537 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+
+\title{FinTrix: Web-Based Hostel Management System for Automated Mess Billing, Expense Tracking, and Administrative Analytics}
+
+\author{
+\IEEEauthorblockN{Your Name}
+\IEEEauthorblockA{
+Department of Computer Applications\\
+Your College or University\\
+City, State, Country\\
+email@example.com
+}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Hostel administration in many institutions still depends on handwritten registers, spreadsheet-based calculations, and scattered approval flows, which increase the probability of billing errors, delayed updates, and poor financial visibility. This paper presents FinTrix, a web-based hostel management system developed to centralize student records, hostel operations, monthly mess billing, expense monitoring, payment handling, and analytics. The proposed system uses a MERN-stack architecture to support role-based workflows for administrators, caretakers, and students. In addition to common hostel operations, the system formalizes monthly expense distribution, gender-sensitive electricity sharing, attendance-aware mess billing, dynamic late fine calculation, and real-time payable status tracking. The paper describes the motivation, system architecture, design flow, mathematical model, implementation details, testing approach, and practical outcomes. Placeholder locations are intentionally provided for diagrams so they can be inserted later during editing.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Hostel management system, MERN stack, mess billing, expense tracking, student administration, analytics, web application
+\end{IEEEkeywords}
+
+\section{Introduction}
+Educational institutions with hostel facilities must manage student accommodation, expense records, food consumption, fee collection, and operational reporting in a consistent manner. In practice, many of these activities are still handled manually or through disconnected spreadsheets. This creates recurring issues such as duplicate entries, delayed billing, unclear outstanding balances, and difficulty tracing how a monthly bill was derived.
+
+FinTrix is designed as a centralized web platform that digitizes these workflows. The system integrates student administration, hostel-wise data segregation, monthly consumption management, expense snapshot generation, mess bill computation, payment updates, and analytics dashboards. The main objective is not only to reduce clerical effort but also to make every bill and summary value explainable through a consistent calculation model.
+
+\section{Problem Statement}
+Traditional hostel administration suffers from the following problems:
+\begin{itemize}
+\item manual record keeping is slow and error-prone,
+\item monthly expense sharing lacks transparency,
+\item student bill generation is difficult to audit,
+\item payment status and pending balances are not updated consistently,
+\item hostel administrators lack quick analytical summaries for decision making.
+\end{itemize}
+
+The problem addressed in this work is the design and implementation of an integrated hostel management system that can automate operational tasks and provide an accurate, formula-driven monthly billing workflow.
+
+\section{Objectives}
+The primary objectives of the proposed work are:
+\begin{itemize}
+\item to digitize hostel student and administrative records,
+\item to automate hostel expense aggregation and student bill generation,
+\item to support role-based access for administrators, caretakers, and students,
+\item to improve transparency through formula-based bill breakdowns,
+\item to provide analytical summaries for billing, collection, and expenditure monitoring,
+\item to reduce manual workload and calculation inconsistency.
+\end{itemize}
+
+\section{Literature Review}
+Recent studies on hostel management systems focus on automation of room allocation, fee management, attendance, complaint handling, and centralized reporting. Several works highlight that manual workflows increase operational overhead and reduce accuracy, especially when the number of students and hostels grows. Modern web-based implementations emphasize usability, accessibility, and database-backed administrative control.
+
+Prior work also shows that hostel systems are most useful when they combine operational modules with financial accountability. However, many papers remain broad at the feature level and do not describe the underlying mathematical model for per-student mess bill computation, fine calculation, or category-wise expense distribution. FinTrix extends this area by explicitly formalizing these calculations within the application workflow.
+
+\subsection{Research Gap}
+Most surveyed systems discuss hostel automation in general terms, but fewer works document:
+\begin{itemize}
+\item transparent month-end cost distribution formulas,
+\item live payable calculation after fines and partial payments,
+\item hostel-wise analytics tied directly to generated bills,
+\item operational handling of attendance-aware and consumption-aware mess billing.
+\end{itemize}
+
+\section{Proposed System}
+FinTrix is a web-based hostel management platform that centralizes:
+\begin{itemize}
+\item student registration and hostel mapping,
+\item monthly consumption entry,
+\item hostel expense management,
+\item mess bill generation,
+\item payment recording,
+\item outstanding and fine tracking,
+\item analytics and reporting.
+\end{itemize}
+
+The system is organized around role-based access control. Administrators can manage system-wide data and analytics, caretakers can manage hostel-specific operations, and students can view relevant billing and status information.
+
+\subsection{Key Modules}
+\begin{itemize}
+\item Student Management
+\item Hostel Allocation and Records
+\item Consumption Management
+\item Hostel Expense Entry
+\item Monthly Expenditure Report
+\item Mess Bill Generation
+\item Payment Tracking
+\item Analytics Dashboard
+\end{itemize}
+
+\subsection{Diagram Placeholder: System Block Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{Block Diagram Placeholder}\\
+I will add the block diagram myself.\\
+Suggested content: users, frontend, backend API, database, billing engine, analytics module.
+\vspace{1.5cm}
+}}
+\caption{Overall block diagram of the proposed FinTrix system.}
+\label{fig:block}
+\end{figure}
+
+\section{System Architecture}
+The application follows a MERN-stack architecture:
+\begin{itemize}
+\item \textbf{Frontend:} React with Vite for user interface rendering,
+\item \textbf{Backend:} Node.js with Express.js for RESTful APIs,
+\item \textbf{Database:} MongoDB with Mongoose for schema-driven persistence,
+\item \textbf{Deployment Support:} web-hosted frontend and backend services.
+\end{itemize}
+
+The architecture separates presentation, business logic, and persistence layers, which improves maintainability and supports modular growth.
+
+\subsection{Diagram Placeholder: Architecture Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{Architecture Diagram Placeholder}\\
+I will add the architecture diagram myself.\\
+Suggested content: React client, Express API, service layer, MongoDB collections, authentication flow.
+\vspace{1.5cm}
+}}
+\caption{High-level architecture of the FinTrix platform.}
+\label{fig:architecture}
+\end{figure}
+
+\section{Mathematical Model and Billing Formulas}
+One of the core contributions of the system is a transparent formula-driven billing process. The following equations summarize the implemented logic.
+
+\subsection{Headcount Variables}
+Let:
+\begin{align}
+T_s &= \text{total active students in a hostel}, \\
+T_g &= \text{total active girls}, \\
+T_b &= \text{total active boys}.
+\end{align}
+
+\subsection{Protein Consumer Counts}
+\begin{align}
+E_s &= \text{number of students with } egg\_count > 0, \\
+C_s &= \text{number of students with } chicken\_count > 0, \\
+P_s &= \text{number of students with } paneer\_count > 0.
+\end{align}
+
+\subsection{Electricity Sharing}
+The total electricity bill \(KEB\) is split using a fixed ratio:
+\begin{align}
+KEB_g &= 0.7 \times KEB, \\
+KEB_b &= 0.3 \times KEB.
+\end{align}
+
+Hence the per-student electricity charges are:
+\begin{align}
+KEB^{(girl)}_{per} &= \frac{KEB_g}{T_g}, \\
+KEB^{(boy)}_{per} &= \frac{KEB_b}{T_b}.
+\end{align}
+
+\subsection{Labour and Night Watch Charges}
+\begin{align}
+L_{per} &= \frac{L}{T_s}
+\end{align}
+where \(L\) is the labour bill.
+
+For hostels where night-watch expense applies only to girls:
+\begin{align}
+NW^{(girl)}_{per} &= \frac{NW}{T_g}, \\
+NW^{(boy)}_{per} &= 0
+\end{align}
+where \(NW\) is the night-watch total.
+
+\subsection{Miscellaneous Shared Charges}
+If banana and bakery are common shared items:
+\begin{align}
+M_{per} = \frac{B_{banana} + B_{bakery}}{T_s}
+\end{align}
+
+\subsection{Protein Unit Prices}
+Let \(E_t\), \(C_t\), and \(P_t\) denote total monthly hostel expenditure for egg, chicken, and paneer respectively. The system first derives cost per three units:
+\begin{align}
+E_{3} &= \frac{E_t}{E_s}, \\
+C_{3} &= \frac{C_t}{C_s}, \\
+P_{3} &= \frac{P_t}{P_s}.
+\end{align}
+
+Per-unit rates then become:
+\begin{align}
+E_{u} &= \frac{E_{3}}{3}, \\
+C_{u} &= \frac{C_{3}}{3}, \\
+P_{u} &= \frac{P_{3}}{3}.
+\end{align}
+
+\subsection{Monthly Expenditure Report}
+The monthly support cost block is computed as:
+\begin{align}
+MSC &= K_{kirana} + O + Mill + V + Milk + Cyl + ELP
+\end{align}
+
+Other miscellaneous spending is:
+\begin{align}
+OM &= C_t + P_t + E_t + B_{banana} + B_{bakery}
+\end{align}
+
+If \(CB\) is the closing balance from the previous month and \(OB\) is the opening balance for the current month, then:
+\begin{align}
+TCB &= MSC + CB, \\
+TOB &= TCB - OB.
+\end{align}
+
+If \(GC\) is the total guest charge for the month, then:
+\begin{align}
+TE &= TOB - GC
+\end{align}
+where \(TE\) is the total expenditure.
+
+If the billing base is calculated using total active student-days:
+\begin{align}
+TD &= T_s \times D_m
+\end{align}
+where \(D_m\) is the number of days in the month.
+
+Thus the mess bill rate per day is:
+\begin{align}
+MB_{day} = \frac{TE}{TD}
+\end{align}
+
+\subsection{Per-Student Base Mess Charge}
+For a student with \(A_d\) absent days in a month:
+\begin{align}
+BillableDays = D_m - A_d
+\end{align}
+
+Then the base mess charge becomes:
+\begin{align}
+BaseMess = MB_{day} \times BillableDays
+\end{align}
+
+\subsection{Per-Student Consumption Charges}
+For a given student:
+\begin{align}
+EggTotal &= E_u \times EggCount, \\
+ChickenTotal &= C_u \times ChickenCount, \\
+PaneerTotal &= P_u \times PaneerCount, \\
+MilkTotal &= MilkAmount.
+\end{align}
+
+\subsection{Total Bill Before Fine}
+The full mess bill before any fine is:
+\begin{align}
+Bill_{total} &= BaseMess + KEB_{charge} + Labour_{charge} + NightWatch_{charge} \nonumber \\
+&\quad + SharedMisc + StaticCharges + EggTotal + ChickenTotal \nonumber \\
+&\quad + PaneerTotal + MilkTotal
+\end{align}
+
+\subsection{Fine Model}
+Let \(d\) represent the number of days after the due date.
+
+Dynamic late fine is defined as:
+\begin{align}
+LateFine(d) =
+\begin{cases}
+2d, & 0 < d \leq 30 \\
+60 + 5(d-30), & d > 30
+\end{cases}
+\end{align}
+
+If \(ManualFine\) is the manually entered fine from the consumption sheet, then:
+\begin{align}
+Fine = ManualFine + LateFine(d)
+\end{align}
+
+\subsection{Live Payable and Outstanding Amount}
+If \(Paid\) denotes the amount already collected:
+\begin{align}
+Payable &= Bill_{total} + Fine, \\
+Outstanding &= Payable - Paid
+\end{align}
+
+\subsection{Analytics Formulas}
+For a given month:
+\begin{align}
+Expenses &= ELP + Cylinder + Oil + Kirana + Milk + KEB \nonumber \\
+&\quad + Labour + NightWatch + Bakery + Banana
+\end{align}
+
+\begin{align}
+Billed &= \sum_{i=1}^{n} Bill_{total}^{(i)}
+\end{align}
+
+\begin{align}
+Outstanding_{month} = \sum_{i=1}^{n} \left(Bill_{total}^{(i)} + Fine^{(i)} - Paid^{(i)}\right)
+\end{align}
+
+\begin{align}
+AverageBill = \frac{1}{n}\sum_{i=1}^{n} Bill_{total}^{(i)}
+\end{align}
+
+\begin{align}
+Collection\% = \frac{PaidStudents}{TotalBills} \times 100
+\end{align}
+
+\section{Software Requirement Specification}
+\subsection{Functional Requirements}
+\begin{itemize}
+\item The system shall store and manage student hostel records.
+\item The system shall support caretaker-wise and hostel-wise operational access.
+\item The system shall record monthly consumption data.
+\item The system shall aggregate hostel expense entries.
+\item The system shall generate student-wise mess bills.
+\item The system shall calculate fines and live outstanding amounts.
+\item The system shall record payments and update bill status.
+\item The system shall provide monthly analytical summaries and reports.
+\end{itemize}
+
+\subsection{Non-Functional Requirements}
+\begin{itemize}
+\item usability through a role-based web interface,
+\item data consistency through centralized persistence,
+\item maintainability through modular service-layer design,
+\item scalability for multiple hostels and larger student counts,
+\item security through authenticated and restricted access.
+\end{itemize}
+
+\subsection{Hardware and Software Requirements}
+\begin{table}[H]
+\centering
+\caption{Indicative Hardware and Software Requirements}
+\label{tab:req}
+\begin{tabular}{p{0.33\linewidth} p{0.57\linewidth}}
+\toprule
+\textbf{Category} & \textbf{Specification} \\
+\midrule
+Frontend & React, Vite, JavaScript, CSS \\
+Backend & Node.js, Express.js \\
+Database & MongoDB, Mongoose \\
+Development Tools & VS Code, Git, Postman, npm \\
+Client Hardware & Standard desktop or laptop with web browser \\
+Deployment Environment & Cloud-hosted or institution-hosted web services \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{System Design}
+\subsection{Use Case Discussion}
+The main actors in the system are:
+\begin{itemize}
+\item Administrator,
+\item Caretaker,
+\item Student.
+\end{itemize}
+
+Administrators oversee global records, analytics, and supervisory actions. Caretakers manage hostel-level consumption, expenses, and payment workflows. Students access bill visibility and related updates.
+
+\subsection{Diagram Placeholder: Use Case Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{Use Case Diagram Placeholder}\\
+I will add the use case diagram myself.
+\vspace{1.5cm}
+}}
+\caption{Use case interaction among administrator, caretaker, and student.}
+\label{fig:usecase}
+\end{figure}
+
+\subsection{Diagram Placeholder: Data Flow Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{DFD Placeholder}\\
+I will add the data flow diagram myself.
+\vspace{1.5cm}
+}}
+\caption{Data flow representation of the proposed system.}
+\label{fig:dfd}
+\end{figure}
+
+\subsection{Diagram Placeholder: ER Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{ER Diagram Placeholder}\\
+I will add the ER diagram myself.
+\vspace{1.5cm}
+}}
+\caption{Entity relationship structure for core hostel and billing data.}
+\label{fig:er}
+\end{figure}
+
+\subsection{Diagram Placeholder: Sequence Diagram}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{Sequence Diagram Placeholder}\\
+I will add the sequence diagram myself.\\
+Suggested flow: caretaker enters expenses $\rightarrow$ system computes snapshot $\rightarrow$ bills generated $\rightarrow$ payment updated.
+\vspace{1.5cm}
+}}
+\caption{Sequence of bill generation and payment update flow.}
+\label{fig:sequence}
+\end{figure}
+
+\section{Implementation}
+The frontend layer is responsible for form-based data entry, bill visualization, filters, reports, and dashboards. The backend exposes REST APIs for students, consumption records, expenses, analytics, bills, and payments. Business rules are implemented in service-layer modules to avoid mixing UI and calculation logic.
+
+MongoDB collections store student profiles, monthly consumption entries, hostel expenses, mess bills, and payment records. The implementation follows a modular approach so that billing, analytics, and payment rules can be maintained independently.
+
+\subsection{Implementation Highlights}
+\begin{itemize}
+\item hostel-wise filtering of operational student data,
+\item formula-driven monthly expense normalization,
+\item student-wise mess bill computation,
+\item live fine and payable calculation,
+\item bill status tracking through amount-paid comparison,
+\item analytics endpoints for billed, collected, and outstanding views.
+\end{itemize}
+
+\section{Testing}
+Testing should cover both functional correctness and calculation accuracy.
+
+\subsection{Suggested Test Cases}
+\begin{itemize}
+\item verify active-student filtering during bill generation,
+\item verify absence-aware reduction in base mess amount,
+\item verify gender-wise electricity distribution,
+\item verify girls-only night-watch application where applicable,
+\item verify protein charges for different consumption counts,
+\item verify late fine growth before and after 30 days,
+\item verify outstanding amount after payment updates,
+\item verify analytics totals against generated bill data.
+\end{itemize}
+
+\section{Results and Discussion}
+The implemented system reduces manual dependency in hostel administration by centralizing operational records and embedding reusable billing rules. Since every major billed value is linked to a formula, the system improves explainability and reduces ambiguity in monthly student charges.
+
+The analytical outputs also provide practical support for administrators by exposing billed totals, collections, pending amounts, and category-wise expense visibility. This makes the platform suitable not only for digitization but also for operational monitoring and accountability.
+
+\subsection{Diagram Placeholder: Screenshots or Result Charts}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\linewidth}{
+\centering
+\vspace{1.5cm}
+\textbf{Results Placeholder}\\
+I will add screenshots, charts, or dashboard visuals myself.
+\vspace{1.5cm}
+}}
+\caption{Placeholder for interface screenshots or result charts.}
+\label{fig:results}
+\end{figure}
+
+\section{Advantages of the Proposed System}
+\begin{itemize}
+\item reduces manual paperwork,
+\item improves financial transparency,
+\item supports structured and repeatable monthly billing,
+\item offers centralized access to operational data,
+\item improves reporting speed and analytical visibility,
+\item supports future expansion for additional hostel workflows.
+\end{itemize}
+
+\section{Conclusion}
+FinTrix demonstrates that a web-based hostel management platform can successfully integrate student administration, monthly expense tracking, bill generation, payment management, and analytics into a single maintainable system. The proposed formula-based approach improves transparency, reduces clerical error, and provides a stronger operational foundation than manual methods.
+
+\section{Future Scope}
+Possible extensions include:
+\begin{itemize}
+\item parent or guardian notification support,
+\item online payment gateway integration,
+\item predictive analytics for expenditure planning,
+\item mobile-first interface enhancements,
+\item document export automation,
+\item AI-assisted anomaly detection in billing and expenses.
+\end{itemize}
+
+\section*{Acknowledgment}
+This section may be edited to include your guide, department, institution, teammates, and other academic acknowledgments.
+
+\begin{thebibliography}{99}
+
+\bibitem{ref1}
+J. Oyeniyi, ``Development of Web-Based Hostel Management System,'' \emph{British Journal of Computer, Networking and Information Technology}, vol. 8, no. 1, pp. 30--41, 2025.
+
+\bibitem{ref2}
+D. Narkhede, R. Bamgude, M. Sonawane, and M. Shevade, ``Hostel Management System (HMS),'' \emph{International Journal for Research in Applied Science \& Engineering Technology}, vol. 10, issue IV, 2022.
+
+\bibitem{ref3}
+A. Pawar, V. Ukarande, S. Kale, P. Kshirsagar, S. G. Ekdante, and J. M. Shaikh, ``Hostel Management System,'' \emph{International Journal of Recent Research in Mathematics Computer Science and Information Technology}, vol. 12, issue 1, pp. 47--56, 2025.
+
+\bibitem{ref4}
+Dinesh B., Gogul Nithin R., Pavatharani R., Sneha R., and C. Senthilkumar, ``Implementation of Hostel Management with Automation Using Design Thinking,'' \emph{IJCRT}, vol. 10, issue 4, 2022.
+
+\bibitem{ref5}
+A. M. Diyaolu, O. B. Abodunrin, A. A. Adedamola, R. S. Ogunode, and O. Omoloba, ``Development of an E-Based Hostel Management System,'' \emph{International Journal of Innovative Science and Research Technology}, vol. 9, issue 6, 2024.
+
+\bibitem{ref6}
+Aravinth M., Nithin K., and J. Kayalvizhi, ``Automated Hostel Management System,'' \emph{International Journal of Scientific Research \& Engineering Trends}, vol. 11, issue 1, 2025.
+
+\bibitem{ref7}
+R. K. Bista, A. J. Karki, B. V. M. Reddy, U. Aakash, R. A. Makaram, and S. Das, ``Hostel Management System,'' \emph{International Journal of Trend in Scientific Research and Development}, vol. 2, issue 4, 2018.
+
+\bibitem{ref8}
+T. Sai Prasad Reddy, S. Jayakrishna, I. Vasu, N. Leela Siddhiswar, and G. Raviteja, ``Hostel Management System,'' \emph{Journal of Emerging Technologies and Innovative Research}, vol. 13, issue 4, 2026.
+
+\bibitem{ref9}
+Likhin S. and Shashidhar Kini K., ``Hostel Management System,'' \emph{Journal of Emerging Technologies and Innovative Research}, vol. 12, issue 7, 2025.
+
+\end{thebibliography}
+
+\end{document}

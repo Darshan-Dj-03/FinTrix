@@ -70,7 +70,7 @@ export function MessBillBreakdownCard({ bill, title = "Bill breakdown", compact 
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-600">Final Calculation</p>
           <div className="mt-5 space-y-1">
             <LineItem label="Absent Days" value={Number(bill.absent_days || 0)} formatter={(value) => String(value)} />
-            <LineItem label="Absence Deduction" value={bill.absence_deduction || 0} />
+        <LineItem label="Absent Reduction" value={bill.absence_deduction || 0} />
             <LineItem label="Mess Bill" value={bill.base_mess} />
             <LineItem label="Additional Food Charges" value={foodTotal} />
             <LineItem label="Static Charges" value={dynamicTotal} />

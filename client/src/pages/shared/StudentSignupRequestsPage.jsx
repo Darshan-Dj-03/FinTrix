@@ -21,6 +21,9 @@ export function StudentSignupRequestsPage({ mode = "caretaker" }) {
   const query = useQuery({
     queryKey: ["student-signup-requests", mode],
     queryFn: studentSignupApi.list,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 
   const forwardMutation = useMutation({

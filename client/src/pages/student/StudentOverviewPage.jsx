@@ -159,7 +159,7 @@ export function StudentOverviewPage() {
                   <p className="mt-2 text-lg font-semibold text-slate-800">{Number(bill.absent_days || 0)}</p>
                 </div>
                 <div className="panel-soft p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Absence deduction</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Absent reduction</p>
                   <p className="mt-2 text-lg font-semibold text-slate-800">{formatCurrency(bill.absence_deduction || 0)}</p>
                 </div>
                 <div className="panel-soft p-4">

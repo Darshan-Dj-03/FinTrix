@@ -1,9 +1,14 @@
 import { create } from "zustand";
 
 export const useUiStore = create((set) => ({
-  sidebarOpen: true,
+  mobileSidebarOpen: false,
+  desktopSidebarExpanded: true,
   search: "",
-  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setMobileSidebarOpen: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
+  toggleMobileSidebar: () => set((state) => ({ mobileSidebarOpen: !state.mobileSidebarOpen })),
+  closeMobileSidebar: () => set({ mobileSidebarOpen: false }),
+  setDesktopSidebarExpanded: (desktopSidebarExpanded) => set({ desktopSidebarExpanded }),
+  toggleDesktopSidebar: () =>
+    set((state) => ({ desktopSidebarExpanded: !state.desktopSidebarExpanded })),
   setSearch: (search) => set({ search }),
 }));

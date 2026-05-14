@@ -44,8 +44,8 @@ const getAbsenceImpact = (bill) => {
     return {
       absent_days: absentDays,
       billable_days: billableDays,
-      absence_deduction: roundTwoDecimals(storedDeduction),
-      base_mess_before_absence: roundTwoDecimals(baseMess + storedDeduction),
+      absence_deduction: roundUpCurrency(storedDeduction),
+      base_mess_before_absence: roundUpCurrency(baseMess + storedDeduction),
     };
   }
 
@@ -62,8 +62,8 @@ const getAbsenceImpact = (bill) => {
   return {
     absent_days: absentDays,
     billable_days: billableDays,
-    absence_deduction: roundTwoDecimals(inferredDeduction),
-    base_mess_before_absence: roundTwoDecimals(baseMess + inferredDeduction),
+    absence_deduction: roundUpCurrency(inferredDeduction),
+    base_mess_before_absence: roundUpCurrency(baseMess + inferredDeduction),
   };
 };
 

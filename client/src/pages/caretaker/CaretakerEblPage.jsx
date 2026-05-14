@@ -15,6 +15,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { CURRENT_MONTH, MONTH_OPTIONS, parseMonthValue } from "../../utils/constants";
+import { calculateLateFinePreview, getDelayDays } from "../../utils/finePreview";
 import { formatCurrency } from "../../utils/formatters";
 
 const getMonthOffset = (value, offset) => {
@@ -40,6 +41,7 @@ const getSortableMonthValue = (month) => {
 export function CaretakerEblPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [editingId, setEditingId] = useState("");
+  const [claimFinePrompt, setClaimFinePrompt] = useState(false);
   const [reportRange, setReportRange] = useState({
     fromMonth: getMonthOffset(CURRENT_MONTH, 3),
     toMonth: CURRENT_MONTH,
@@ -112,6 +114,23 @@ export function CaretakerEblPage() {
       remainingBalance,
     };
   });
+  const selectedRangeFineAlerts = selectedRangeBills
+    .map((row) => {
+      const delayDays = getDelayDays(row.due_date, new Date());
+      const fineAmount = Math.max(Number(row.fine || 0), calculateLateFinePreview(row.due_date, new Date()));
+
+      if (delayDays <= 0 || fineAmount <= 0) {
+        return null;
+      }
+
+      return {
+        month: row.month,
+        delayDays,
+        fineAmount,
+      };
+    })
+    .filter(Boolean);
+  const selectedRangeFineTotal = selectedRangeFineAlerts.reduce((sum, row) => sum + Number(row.fineAmount || 0), 0);
 
   useEffect(() => {
     if (!matchedPeriod) {
@@ -250,8 +269,17 @@ export function CaretakerEblPage() {
   }
 
   const draftPeriods = (periodsQuery.data?.data || []).filter((row) => row.status === "draft");
+  const handleSaveUniversityClaim = () => {
+    if (selectedRangeFineAlerts.length > 0) {
+      setClaimFinePrompt(true);
+      return;
+    }
+
+    saveMutation.mutate(form);
+  };
 
   return (
+    <>
     <div className="space-y-6">
       <PageHeader
         eyebrow="EBL"
@@ -357,6 +385,11 @@ export function CaretakerEblPage() {
 
           {settlementRows.length ? (
             <div className="mt-5 space-y-4">
+              {selectedRangeFineAlerts.length > 0 ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  Late-fine alert: {selectedRangeFineAlerts.length} month{selectedRangeFineAlerts.length === 1 ? "" : "s"} in this EBL range are overdue, with a combined fine preview of {formatCurrency(selectedRangeFineTotal)}.
+                </div>
+              ) : null}
               {settlementRows.map((row) => (
                 <div key={row.month} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="grid gap-4 lg:grid-cols-4">
@@ -388,7 +421,7 @@ export function CaretakerEblPage() {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          <Button type="button" loading={saveMutation.isPending} onClick={() => saveMutation.mutate(form)}>
+          <Button type="button" loading={saveMutation.isPending} onClick={handleSaveUniversityClaim}>
             Save university claim
           </Button>
         </div>
@@ -494,5 +527,43 @@ export function CaretakerEblPage() {
         </div>
       </div>
     </div>
+
+      {claimFinePrompt && selectedRangeFineAlerts.length > 0 ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-[28px] border border-white/70 bg-white p-6 shadow-panel">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">Fine alert</p>
+            <h3 className="mt-3 font-display text-2xl font-bold text-ink">Selected EBL claim includes overdue months</h3>
+            <div className="mt-5 space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              {selectedRangeFineAlerts.map((row) => (
+                <p key={row.month}>
+                  <span className="font-semibold">{row.month}:</span> {row.delayDays} delay day{row.delayDays === 1 ? "" : "s"} and fine amount {formatCurrency(row.fineAmount)}
+                </p>
+              ))}
+              <p>
+                <span className="font-semibold">Total fine preview:</span> {formatCurrency(selectedRangeFineTotal)}
+              </p>
+            </div>
+            <p className="mt-4 text-sm text-slate-500">
+              Continue only if you want to save this EBL university claim after reviewing the late-fine alert for the covered months.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button type="button" variant="ghost" onClick={() => setClaimFinePrompt(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setClaimFinePrompt(false);
+                  saveMutation.mutate(form);
+                }}
+                loading={saveMutation.isPending}
+              >
+                Continue save
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
