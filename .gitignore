@@ -20,3 +20,5 @@ tmp_docx/
 # logs
 *.log
 tmp_docx_*
+
+tmp_render_*/
